@@ -1,4 +1,3 @@
-{-# OPTIONS -dynamic #-}
 module HolePlugin where
 
 import GhcPlugins
@@ -10,44 +9,52 @@ import RdrName (importSpecModule)
 
 import TcRnTypes
 
+import System.Process
+
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = hfp, pluginRecompile = purePlugin }
 
 hfp :: [CommandLineOption] -> Maybe HoleFitPlugin
-hfp modname = Just (HoleFitPlugin (candP modname) fp)
+hfp opts = Just (HoleFitPlugin (candP opts) (fp opts))
 
+toFilter :: Maybe String -> Maybe String
+toFilter = flip (>>=) (stripPrefix "_module_")
 
-propName :: Maybe String -> Maybe String
-propName = flip (>>=) (stripPrefix "_satisfies_")
-
-candOccNameString :: HoleFitCandidate -> String
-candOccNameString (IdHFCand hfid) = occNameString $ occName hfid
-candOccNameString (GreHFCand gre) = occNameString $ occName $ gre_name gre
-candOccNameString (NameHFCand name) = occNameString $ occName name
-
-findProp :: String -> [HoleFitCandidate] -> [HoleFitCandidate]
-findProp str to_check = findProp' [] to_check
+replace :: Eq a => a -> a -> [a] -> [a]
+replace match repl str = replace' [] str
   where
-    findProp' sofar (cand:cands) =
-      do if (candOccNameString cand) == str
-          then keep_it else discard
-      where discard = findProp' sofar cands
-            keep_it = findProp' (cand:sofar) cands
-    findProp' sofar _ = reverse sofar
+    replace' sofar (x:xs) | x == match = replace' (repl:sofar) xs
+    replace' sofar (x:xs) = replace' (x:sofar) xs
+    replace' sofar [] = reverse sofar
 
+-- | This candidate plugin filters the candidates by module,
+--   using the name of the hole as module to search in
 candP :: [CommandLineOption] -> CandPlugin
-candP opts hole cands =
+candP _ hole cands =
   do let he = case holeCt hole of
                 Just (CHoleCan _ h) -> Just (occNameString $ holeOcc h)
                 _ -> Nothing
-     case propName he of
-       Just p -> do liftIO $ print p
-                    liftIO $ print $ map candOccNameString $ findProp p cands
-       _ -> return ()
-     return $ filter greNotInOpts cands
-  where greNotInOpts (GreHFCand gre) = not $ null $ intersect (inScopeVia gre) opts
-        greNotInOpts _ = True
+     case toFilter he of
+        Just undscModName -> do let replaced = replace '_' '.' undscModName
+                                liftIO $ print replaced
+                                let res = filter (greNotInOpts [replaced]) cands
+                                liftIO $ print $ length res
+                                return $ res 
+        _ -> return cands
+  where greNotInOpts opts (GreHFCand gre)  = not $ null $ intersect (inScopeVia gre) opts
+        greNotInOpts _ _ = True
         inScopeVia = map (moduleNameString . importSpecModule) . gre_imp
 
-fp :: FitPlugin
-fp _ hfs = return hfs
+-- Yes, it's pretty hacky, but it is just an example :)
+searchHoogle :: String -> IO [String]
+searchHoogle ty = lines <$> (readProcess "hoogle" [(show ty)] [])
+
+fp :: [CommandLineOption] -> FitPlugin
+fp ("hoogle":[]) hole hfs =
+    do dflags <- getDynFlags
+       let tyString = showSDoc dflags . ppr . ctPred <$> holeCt hole
+       res <- case tyString of
+                Just ty -> liftIO $ searchHoogle ty
+                _ -> return []
+       return $ (take 2 $ map (RawHoleFit . text .("Hoogle says: " ++)) res) ++ hfs
+fp _ _ hfs = return hfs
