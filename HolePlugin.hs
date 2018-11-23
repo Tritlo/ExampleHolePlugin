@@ -36,9 +36,7 @@ candP _ hole cands =
                 _ -> Nothing
      case toFilter he of
         Just undscModName -> do let replaced = replace '_' '.' undscModName
-                                liftIO $ print replaced
                                 let res = filter (greNotInOpts [replaced]) cands
-                                liftIO $ print $ length res
                                 return $ res 
         _ -> return cands
   where greNotInOpts opts (GreHFCand gre)  = not $ null $ intersect (inScopeVia gre) opts
