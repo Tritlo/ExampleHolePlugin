@@ -32,10 +32,6 @@ import Prelude hiding (head, last)
 
 import Data.List (head, last)
 
-
-prop_length :: ([Int] -> Int) -> Bool
-prop_length f = f [] == 0 && f [1,2,3] == 3
-
 t :: [Int] -> Int
 t = _module_Prelude
 
