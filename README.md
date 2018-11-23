@@ -1,6 +1,8 @@
 ExampleHolePlugin
 =================
 
+Note! Needs to a custom branch of GHC (soon to be in submission)
+
 An example of a hole fit plugin for GHC that can filter by module and 
 searches the local Hoogle for fits (if hoogle is available, and the 
 `-fplugin-opt=HolePlugin:hoogle` is set).
@@ -14,7 +16,8 @@ then, build with
   cabal new-build test
 ```
 
-and modify `test/Main.hs` to try it out (or run it on your own files)
+and modify `test/Main.hs` to try it out (or run it on your own files).
+
 
 
 Example Output:
