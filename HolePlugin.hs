@@ -98,11 +98,7 @@ candP flags hole orig_cands =
                                                                    liftIO $ print $ "isLoaded 2:" ++ (show $ checkLoad)
                                                                    sesh2 <- hsc_HPT <$> getSession
                                                                    liftIO $ print $ (showSDoc dflags . pprHPT) $ sesh2
-                                                                   res <- parseName "t"
-                                                                   --con <- getContext
-                                                                   --setContext (imp:con)
-                                                                   --names <- getNamesInScope
-                                                                   --let pnames = sort $ map (showSDoc dflags . ppr) names
+                                                                   res <- parseName propName
                                                                    let topScope = sort $ map (showSDoc dflags . ppr) (modInfoExports $ moduleInfo $ thisMod)
                                                                    return topScope
                                      liftIO $ print test
@@ -127,6 +123,7 @@ fp :: [CommandLineOption] -> FitPlugin
 fp flags hole hfs | "hoogle" `elem` flags =
     do dflags <- getDynFlags
        let tyString = showSDoc dflags . ppr . ctPred <$> holeCt hole
+       liftIO $ putStrLn $ show $ ("fp:" ++) <$>  tyString
        res <- case tyString of
                 Just ty -> liftIO $ searchHoogle ty
                 _ -> return []
