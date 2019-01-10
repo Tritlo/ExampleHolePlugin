@@ -1,5 +1,4 @@
-{-# OPTIONS -fplugin=HolePlugin -fplugin-opt=HolePlugin:hoogle #-}
--- Make sure to remove the hoogle opt if hoogle is not available locally
+{-# OPTIONS -fplugin=HolePlugin #-}
 module Main where
 
 import Prelude hiding (head, last)
@@ -7,10 +6,13 @@ import Prelude hiding (head, last)
 import Data.List (head, last)
 
 t :: [Int] -> Int
-t = _module_Prelude
+t = _with_module_Prelude
 
 g :: [Int] -> Int
-g = _module_Data_List
+g = _with_module_Data_List
+
+h :: [Int] -> Int
+h = _with_hoogle
 
 main :: IO ()
 main = print $ t [1,2,3]

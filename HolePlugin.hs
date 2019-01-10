@@ -18,7 +18,7 @@ hfp :: [CommandLineOption] -> Maybe HoleFitPlugin
 hfp opts = Just (HoleFitPlugin (candP opts) (fp opts))
 
 toFilter :: Maybe String -> Maybe String
-toFilter = flip (>>=) (stripPrefix "_module_")
+toFilter = flip (>>=) (stripPrefix "module_")
 
 replace :: Eq a => a -> a -> [a] -> [a]
 replace match repl str = replace' [] str
@@ -27,19 +27,23 @@ replace match repl str = replace' [] str
     replace' sofar (x:xs) = replace' (x:sofar) xs
     replace' sofar [] = reverse sofar
 
+toHoleFitCommand :: TypedHole -> Maybe String
+toHoleFitCommand (TyH{holeCt = Just (CHoleCan _ h)})
+    = stripPrefix "_with_" (occNameString $ holeOcc h)
+toHoleFitCommand _ = Nothing
+
+
 -- | This candidate plugin filters the candidates by module,
 --   using the name of the hole as module to search in
 candP :: [CommandLineOption] -> CandPlugin
-candP _ hole cands =
-  do let he = case holeCt hole of
-                Just (CHoleCan _ h) -> Just (occNameString $ holeOcc h)
-                _ -> Nothing
-     case toFilter he of
-        Just undscModName -> do let replaced = replace '_' '.' undscModName
-                                let res = filter (greNotInOpts [replaced]) cands
-                                return $ res 
+candP _ hole cands = do
+     case (toHoleFitCommand hole) of
+        Just "hoogle" -> return []
+        Just name | Just modName <- stripPrefix "module_" name ->
+          return $ filter (greNotInOpts [(replace '_' '.' modName)]) cands
         _ -> return cands
-  where greNotInOpts opts (GreHFCand gre)  = not $ null $ intersect (inScopeVia gre) opts
+  where greNotInOpts opts (GreHFCand gre) =
+            not $ null $ intersect (inScopeVia gre) opts
         greNotInOpts _ _ = True
         inScopeVia = map (moduleNameString . importSpecModule) . gre_imp
 
@@ -48,11 +52,14 @@ searchHoogle :: String -> IO [String]
 searchHoogle ty = lines <$> (readProcess "hoogle" [(show ty)] [])
 
 fp :: [CommandLineOption] -> FitPlugin
-fp ("hoogle":[]) hole hfs =
-    do dflags <- getDynFlags
-       let tyString = showSDoc dflags . ppr . ctPred <$> holeCt hole
-       res <- case tyString of
-                Just ty -> liftIO $ searchHoogle ty
-                _ -> return []
-       return $ (take 2 $ map (RawHoleFit [] Nothing . text .("Hoogle says: " ++)) res) ++ hfs
-fp _ _ hfs = return hfs
+fp _ hole hfs = case toHoleFitCommand hole of
+                  Just "hoogle" ->
+                    do dflags <- getDynFlags
+                       let tyString = showSDoc dflags . ppr . ctPred <$> holeCt hole
+                       res <- case tyString of
+                                Just ty -> liftIO $ searchHoogle ty
+                                _ -> return []
+                       return $ (take 2
+                              $ map (RawHoleFit [] Nothing . text
+                                    . ("Hoogle says: " ++)) res)
+                  _ -> return hfs
