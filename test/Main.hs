@@ -1,20 +1,9 @@
-{-# OPTIONS -fplugin=HolePlugin #-}
+{-# OPTIONS -fplugin=HolePlugin -fplugin-opt=HolePlugin:out.fits -fno-show-type-app-of-hole-fits #-}
 module Main where
 
 import Prelude hiding (head, last)
 
 import Data.List (head, last)
-
-{-
-t :: [Int] -> Int
-t = _with_module_Prelude
-
-g :: [Int] -> Int
-g = _with_module_Data_List
-
-h :: [Int] -> Int
-h = _with_hoogle
--}
 
 j :: [Int] -> Int
 j = _with_prop_isLength

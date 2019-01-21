@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module HolePlugin where
 
 import GhcPlugins
@@ -11,69 +12,82 @@ import TcRnTypes
 
 import System.Process
 
+import Data.Maybe (mapMaybe)
+
+import TcRnMonad
+
+import Json
+
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = hfp, pluginRecompile = purePlugin }
 
 hfp :: [CommandLineOption] -> Maybe HoleFitPlugin
 hfp opts = Just (HoleFitPlugin (candP opts) (fp opts))
 
-toFilter :: Maybe String -> Maybe String
-toFilter = flip (>>=) (stripPrefix "module_")
-
-replace :: Eq a => a -> a -> [a] -> [a]
-replace match repl str = replace' [] str
-  where
-    replace' sofar (x:xs) | x == match = replace' (repl:sofar) xs
-    replace' sofar (x:xs) = replace' (x:sofar) xs
-    replace' sofar [] = reverse sofar
 
 toHoleFitCommand :: TypedHole -> Maybe String
 toHoleFitCommand (TyH{holeCt = Just (CHoleCan _ h)})
     = stripPrefix "_with_" (occNameString $ holeOcc h)
 toHoleFitCommand _ = Nothing
 
-
-hoogleCP :: CandPlugin
-hoogleCP _ _ = return []
-
-modFilterCP :: String -> CandPlugin
-modFilterCP modName _ cands =
-    return $ filter (greNotInOpts [(replace '_' '.' modName)]) cands
-  where greNotInOpts opts (GreHFCand gre) =
-            not $ null $ intersect (inScopeVia gre) opts
-        greNotInOpts _ _ = True
-        inScopeVia = map (moduleNameString . importSpecModule) . gre_imp
-
+holeName :: TypedHole -> Maybe String
+holeName (TyH{holeCt = Just (CHoleCan _ h)})
+    = Just (occNameString $ holeOcc h)
+holeName _ = Nothing
 
 -- | This candidate plugin filters the candidates by module,
 --   using the name of the hole as module to search in
 candP :: [CommandLineOption] -> CandPlugin
 candP _ hole cands = do
      case (toHoleFitCommand hole) of
-        Just "hoogle" -> hoogleCP hole cands
-        Just name | Just modName <- stripPrefix "module_" name ->
-            modFilterCP modName hole cands
         _ -> return cands
 
--- Yes, it's pretty hacky, but it is just an example :)
-searchHoogle :: String -> IO [String]
-searchHoogle ty = lines <$> (readProcess "hoogle" [(show ty)] [])
+hfName :: HoleFit -> Maybe Name
+hfName hf@(HoleFit {}) = (Just . hfCandName . hfCand) hf
+hfName _ = Nothing
+
+hfCandName  :: HoleFitCandidate -> Name
+hfCandName (IdHFCand id) = idName id
+hfCandName (NameHFCand name) = name
+hfCandName (GreHFCand gre) = gre_name gre
+hfCandName (RawHFCand n _ _) = n
 
 
-propFilterFP :: String -> FitPlugin
-propFilterFP name hole fits = liftIO $ (putStrLn ("prop was: " ++ name)) >> return fits
+data PropFilterOut = PFO { hName :: Maybe String,
+                           pName :: String,
+                           hLoc  :: Maybe String,
+                           hFits :: [String]} deriving (Show)
 
+
+fromMaybeNull :: Maybe String -> JsonDoc
+fromMaybeNull (Just s) = JSString s
+fromMaybeNull _ = JSNull
+
+instance ToJson PropFilterOut where
+  json (PFO {..}) = JSObject [ ("file", fromMaybeNull hLoc),
+                               ("hole", fromMaybeNull hName),
+                               ("prop", JSString pName),
+                               ("fits", JSArray $ map JSString hFits)]
+
+
+hFile :: TypedHole -> Maybe String
+hFile (TyH { holeCt = Just (CHoleCan ev _)}) =
+   Just (unpackFS (srcSpanFile $ ctLocSpan (ctev_loc ev )))
+hFile _ = Nothing
+
+propFilterFP :: String -> String -> FitPlugin
+propFilterFP fn name hole fits =
+  do fs <- getDynFlags
+     liftIO $ do putStrLn ("prop was: " ++ name)
+                 let fstrings = map (showSDoc fs . ppr) $ (mapMaybe hfName fits)
+                     pfo = PFO { hName = holeName hole, pName = ("prop_" ++ name),
+                                 hLoc = hFile hole, hFits = fstrings}
+                 appendFile fn $ ((showSDoc fs . renderJSON) $ json pfo) ++ ",\n"
+                 return fits
+ 
 fp :: [CommandLineOption] -> FitPlugin
-fp _ hole hfs = case toHoleFitCommand hole of
-                  Just "hoogle" ->
-                    do dflags <- getDynFlags
-                       let tyString = showSDoc dflags . ppr . ctPred <$> holeCt hole
-                       res <- case tyString of
-                                Just ty -> liftIO $ searchHoogle ty
-                                _ -> return []
-                       return $ (take 2
-                              $ map (RawHoleFit [] Nothing . text
-                                    . ("Hoogle says: " ++)) res)
+fp [fn] hole hfs = case toHoleFitCommand hole of
                   Just name | Just propName <- stripPrefix "prop_" name ->
-                      propFilterFP propName hole hfs
+                      propFilterFP fn propName hole hfs
                   _ -> return hfs
+fp _ _ hfs = return hfs
