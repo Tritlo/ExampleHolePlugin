@@ -33,23 +33,35 @@ toHoleFitCommand (TyH{holeCt = Just (CHoleCan _ h)})
 toHoleFitCommand _ = Nothing
 
 
--- | This candidate plugin filters the candidates by module,
---   using the name of the hole as module to search in
-candP :: [CommandLineOption] -> CandPlugin
-candP _ hole cands = do
-     case (toHoleFitCommand hole) of
-        Just "hoogle" -> return []
-        Just name | Just modName <- stripPrefix "module_" name ->
-          return $ filter (greNotInOpts [(replace '_' '.' modName)]) cands
-        _ -> return cands
+hoogleCP :: CandPlugin
+hoogleCP _ _ = return []
+
+modFilterCP :: String -> CandPlugin
+modFilterCP modName _ cands =
+    return $ filter (greNotInOpts [(replace '_' '.' modName)]) cands
   where greNotInOpts opts (GreHFCand gre) =
             not $ null $ intersect (inScopeVia gre) opts
         greNotInOpts _ _ = True
         inScopeVia = map (moduleNameString . importSpecModule) . gre_imp
 
+
+-- | This candidate plugin filters the candidates by module,
+--   using the name of the hole as module to search in
+candP :: [CommandLineOption] -> CandPlugin
+candP _ hole cands = do
+     case (toHoleFitCommand hole) of
+        Just "hoogle" -> hoogleCP hole cands
+        Just name | Just modName <- stripPrefix "module_" name ->
+            modFilterCP modName hole cands
+        _ -> return cands
+
 -- Yes, it's pretty hacky, but it is just an example :)
 searchHoogle :: String -> IO [String]
 searchHoogle ty = lines <$> (readProcess "hoogle" [(show ty)] [])
+
+
+propFilterFP :: String -> FitPlugin
+propFilterFP name hole fits = liftIO $ (putStrLn ("prop was: " ++ name)) >> return fits
 
 fp :: [CommandLineOption] -> FitPlugin
 fp _ hole hfs = case toHoleFitCommand hole of
@@ -62,4 +74,6 @@ fp _ hole hfs = case toHoleFitCommand hole of
                        return $ (take 2
                               $ map (RawHoleFit [] Nothing . text
                                     . ("Hoogle says: " ++)) res)
+                  Just name | Just propName <- stripPrefix "prop_" name ->
+                      propFilterFP propName hole hfs
                   _ -> return hfs
