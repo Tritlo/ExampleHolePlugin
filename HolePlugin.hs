@@ -18,6 +18,8 @@ import TcRnMonad
 
 import Json
 
+import GenProg
+
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = hfp, pluginRecompile = purePlugin }
 
@@ -78,11 +80,15 @@ hFile _ = Nothing
 propFilterFP :: String -> String -> FitPlugin
 propFilterFP fn name hole fits =
   do fs <- getDynFlags
+     mod <- (moduleNameString . moduleName . tcg_mod) <$> getGblEnv
      liftIO $ do putStrLn ("prop was: " ++ name)
                  let fstrings = map (showSDoc fs . ppr) $ (mapMaybe hfName fits)
-                     pfo = PFO { hName = holeName hole, pName = ("prop_" ++ name),
+                     pn = ("prop_" ++ name)
+                     pfo = PFO { hName = holeName hole, pName = pn,
                                  hLoc = hFile hole, hFits = fstrings}
+                 putStrLn (genProg mod pn fstrings)
                  appendFile fn $ ((showSDoc fs . renderJSON) $ json pfo) ++ ",\n"
+                 writeFile (fn ++ ".hs") $ (genProg mod pn fstrings)
                  return fits
  
 fp :: [CommandLineOption] -> FitPlugin
