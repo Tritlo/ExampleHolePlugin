@@ -20,6 +20,8 @@ import Json
 
 import GenProg
 
+import Test.ProgInput
+
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = hfp, pluginRecompile = purePlugin }
 
@@ -65,12 +67,6 @@ fromMaybeNull :: Maybe String -> JsonDoc
 fromMaybeNull (Just s) = JSString s
 fromMaybeNull _ = JSNull
 
-instance ToJson PropFilterOut where
-  json (PFO {..}) = JSObject [ ("file", fromMaybeNull hLoc),
-                               ("hole", fromMaybeNull hName),
-                               ("prop", JSString pName),
-                               ("fits", JSArray $ map JSString hFits)]
-
 
 hFile :: TypedHole -> Maybe String
 hFile (TyH { holeCt = Just (CHoleCan ev _)}) =
@@ -87,8 +83,11 @@ propFilterFP fn name hole fits =
                      pfo = PFO { hName = holeName hole, pName = pn,
                                  hLoc = hFile hole, hFits = fstrings}
                  putStrLn (genProg mod pn fstrings)
-                 appendFile fn $ ((showSDoc fs . renderJSON) $ json pfo) ++ ",\n"
-                 writeFile (fn ++ ".hs") $ (genProg mod pn fstrings)
+                 --appendFile fn $ ((showSDoc fs . renderJSON) $ json pfo) ++ ",\n"
+                 --writeFile (fn ++ ".hs") $ (genProg mod pn fstrings)
+                 appendFile fn $ ( Prelude.<> "\n") $ show $ (ProgIn {modN = mod, propN = pn,
+                  fitStrs = fstrings, holeN = holeName hole,
+                  holeL = hFile hole})
                  return fits
  
 fp :: [CommandLineOption] -> FitPlugin

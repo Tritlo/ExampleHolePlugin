@@ -1,5 +1,5 @@
 packages: ./
-          ./test
+          ./Test
 with-compiler: /home/tritlo/Code/ghc/inplace/bin/ghc-stage2
 
 repository head.hackage
