@@ -5,14 +5,9 @@ module Test.FindFit where
 import Text.Printf
 import Test.ProgInput
 import Data.List (nub, intercalate, replicate)
-import Data.Text (pack)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-
 
 getProgInputs :: FilePath -> IO [ProgInput]
-getProgInputs file = map (read @ProgInput) . lines
-                 <$> readFile file
+getProgInputs file = map (read @ProgInput) . lines <$> readFile file
 
 data ProgOut = ProgO { oHoleL :: Maybe String
                      , oHoleN :: Maybe String
@@ -30,24 +25,23 @@ main = do pins <- getProgInputs "out.fits"
           putStrLn $ prog
           writeFile "FitTest.hs" prog
 
+addToFile :: ProgOut -> IO ()
+addToFile (ProgO { oHoleL = Just filename
+                 , oHoleN = Just hn
+                 , fits = fits})
+    = appendFile filename (printf "%s = %s\n" hn res)
+         where res = case fits of
+                      [] -> "undefined"
+                      (f:_) -> f
+addToFile _ = return ()
 
-replaceInFiles :: [ProgOut] -> IO ()
-replaceInFiles [] = return ()
-replaceInFiles (ProgO {oHoleL = Just filename, oHoleN = Just hn, fits = fits}:rest)
-    = do file <- T.readFile filename
-         let hnt = pack hn
-             res = case fits of
-                    [] -> T.replace hnt (pack "undefined") file
-                    (f:_) -> T.replace hnt (pack f) file
-         T.writeFile filename res
-         replaceInFiles rest
-
-replaceInFiles (_:rest) = replaceInFiles rest
+addToFiles :: [ProgOut] -> IO ()
+addToFiles = mapM_ addToFile
 
 
 
 genMain :: Program
-genMain = unlines $ ["", "main = fitReps >>= replaceInFiles"]
+genMain = unlines $ ["", "main = fitReps >>= addToFiles"]
 
 genFitReps :: [Statement] -> Program
 genFitReps checks = unlines ["fitReps :: IO [ProgOut]"

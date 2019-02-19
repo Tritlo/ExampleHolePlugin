@@ -8,8 +8,7 @@ echo '\n' | ( echo ":load FindFit.hs" \
             && echo "FitTest.main"\
             && echo ":q" \
             && cat ) | cabal new-repl
-cat Main.hs
-diff MainOrig.hs Main.hs
+bat --theme='Monokai Extended Light' Main.hs
 cp MainOrig.hs Main.hs
 
 

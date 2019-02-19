@@ -18,9 +18,9 @@ import TcRnMonad
 
 import Json
 
-import GenProg
-
 import Test.ProgInput
+
+import Data.Hashable
 
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = hfp, pluginRecompile = purePlugin }
@@ -62,6 +62,11 @@ data PropFilterOut = PFO { hName :: Maybe String,
                            hLoc  :: Maybe String,
                            hFits :: [String]} deriving (Show)
 
+data ShouldFilterOut = SFO { shName :: Maybe String,
+                             spName :: String,
+                             shLoc  :: Maybe String,
+                             shFits :: [String]} deriving (Show)
+
 
 fromMaybeNull :: Maybe String -> JsonDoc
 fromMaybeNull (Just s) = JSString s
@@ -82,17 +87,30 @@ propFilterFP fn name hole fits =
                      pn = ("prop_" ++ name)
                      pfo = PFO { hName = holeName hole, pName = pn,
                                  hLoc = hFile hole, hFits = fstrings}
-                 putStrLn (genProg mod pn fstrings)
-                 --appendFile fn $ ((showSDoc fs . renderJSON) $ json pfo) ++ ",\n"
-                 --writeFile (fn ++ ".hs") $ (genProg mod pn fstrings)
                  appendFile fn $ ( Prelude.<> "\n") $ show $ (ProgIn {modN = mod, propN = pn,
                   fitStrs = fstrings, holeN = holeName hole,
                   holeL = hFile hole})
+                 return fits
+
+shouldFilterFP :: String -> String -> FitPlugin
+shouldFilterFP fn name hole fits =
+  do fs <- getDynFlags
+     mod <- (moduleNameString . moduleName . tcg_mod) <$> getGblEnv
+     liftIO $ do putStrLn ("should was: " ++ name)
+                 let fstrings = map (showSDoc fs . ppr) $ (mapMaybe hfName fits)
+                     sfo = SFO { shName = holeName hole, spName = name,
+                                 shLoc = hFile hole, shFits = fstrings}
+                 appendFile fn $ ( Prelude.<> "\n") $ show $
+                    (ProgIn {modN = mod, propN = name,
+                             fitStrs = fstrings, holeN = holeName hole,
+                             holeL = hFile hole})
                  return fits
  
 fp :: [CommandLineOption] -> FitPlugin
 fp [fn] hole hfs = case toHoleFitCommand hole of
                   Just name | Just propName <- stripPrefix "prop_" name ->
                       propFilterFP fn propName hole hfs
+                  Just name | Just shouldName <- stripPrefix "should_" name ->
+                      shouldFilterFP fn shouldName hole hfs
                   _ -> return hfs
 fp _ _ hfs = return hfs
