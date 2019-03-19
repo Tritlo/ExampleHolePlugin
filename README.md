@@ -48,6 +48,8 @@ prop_isHead :: ([Int] -> Int) -> [Int] -> Bool
 prop_isHead f [] = True
 prop_isHead f (x:xs) = (f (x:xs)) == x
 
+main :: IO ()
+main = print "hey"
 ```
 
 the output is:
