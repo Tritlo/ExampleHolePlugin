@@ -3,7 +3,7 @@
 cp Main.hs MainOrig.hs
 rm -f out.fits
 echo '\n' | ( echo ":load FindFit.hs" \
-            && echo "main" \
+            && echo "FindFit.main" \
             && echo ":load FitTest.hs"\
             && echo "FitTest.main"\
             && echo ":q" \

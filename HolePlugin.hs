@@ -1,7 +1,9 @@
 {-# LANGUAGE RecordWildCards #-}
 module HolePlugin where
 
-import GhcPlugins
+import GhcPlugins hiding ((<>))
+
+import Data.Coerce (coerce)
 
 import TcHoleErrors
 
@@ -22,39 +24,57 @@ import Test.ProgInput
 
 import Data.Hashable
 
+import Debug.Trace
+
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = hfp, pluginRecompile = purePlugin }
 
-hfp :: [CommandLineOption] -> Maybe HoleFitPlugin
-hfp opts = Just (HoleFitPlugin (candP opts) (fp opts))
+hfp :: [CommandLineOption] -> Maybe HoleFitPluginR
+hfp opts = Just (HoleFitPluginR init plugin stop)
+  where init =  liftIO (putStrLn "initializing") >> newTcRef (coerce (0 :: Int))
+        stop = const (liftIO (putStrLn "stopping"))
+        plugin ref = HoleFitPlugin (candP opts ref) (fp opts ref)
 
 
-toHoleFitCommand :: TypedHole -> Maybe String
-toHoleFitCommand (TyH{holeCt = Just (CHoleCan _ h)})
-    = stripPrefix "_with_" (occNameString $ holeOcc h)
-toHoleFitCommand _ = Nothing
+toHoleFitCommand :: TypedHole -> String -> Maybe String
+toHoleFitCommand (TyH{holeCt = Just (CHoleCan _ h)}) str
+    = stripPrefix ("_" <> str <> "_") $ occNameString $ holeOcc h
+toHoleFitCommand _ _ = Nothing
 
 holeName :: TypedHole -> Maybe String
 holeName (TyH{holeCt = Just (CHoleCan _ h)})
     = Just (occNameString $ holeOcc h)
 holeName _ = Nothing
 
+
+newtype HolePluginState = HPS Int
+  deriving (Show)
+
+bumpHPS :: HolePluginState -> HolePluginState
+--bumpHPS (HPS a) = HPS (a + 1)
+bumpHPS = coerce ((+ 1) :: Int -> Int)
+
+
 -- | This candidate plugin filters the candidates by module,
 --   using the name of the hole as module to search in
-candP :: [CommandLineOption] -> CandPlugin
-candP _ hole cands = do
-     case (toHoleFitCommand hole) of
-        _ -> return cands
+candP :: [CommandLineOption] -> TcRef HolePluginState -> CandPlugin
+candP _ rf hole cands =
+  liftIO (putStrLn $ "candP invoked on " <> (show $ holeName hole)) >>
+  case toHoleFitCommand hole "only" of
+                          Just modName -> return $ filter (inScopeVia modName) cands
+                          _ -> do {r <- readTcRef rf
+                                  ; liftIO $ putStrLn ("non 'only's so far: " ++ show r)
+                                  ; updTcRef rf bumpHPS
+                                  ; return cands }
+   where inScopeVia modNameStr (GreHFCand gre) =
+           elem (toModName modNameStr) $
+             map (moduleNameString . importSpecModule) $ gre_imp gre
+         inScopeVia _ _ = False
+         toModName = replace '_' '.'
 
-hfName :: HoleFit -> Maybe Name
-hfName hf@(HoleFit {}) = (Just . hfCandName . hfCand) hf
-hfName _ = Nothing
-
-hfCandName  :: HoleFitCandidate -> Name
-hfCandName (IdHFCand id) = idName id
-hfCandName (NameHFCand name) = name
-hfCandName (GreHFCand gre) = gre_name gre
-hfCandName (RawHFCand n _ _) = n
+replace :: Eq a => a -> a -> [a] -> [a]
+replace _ _ [] = []
+replace a b (x:xs) = (if x == a then b else x):replace a b xs
 
 
 data PropFilterOut = PFO { hName :: Maybe String,
@@ -77,6 +97,10 @@ hFile :: TypedHole -> Maybe String
 hFile (TyH { holeCt = Just (CHoleCan ev _)}) =
    Just (unpackFS (srcSpanFile $ ctLocSpan (ctev_loc ev )))
 hFile _ = Nothing
+
+hfName :: HoleFit -> Maybe String
+hfName (RawHoleFit _) = Nothing
+hfName hf = Just $ getOccString $ hfCand hf
 
 propFilterFP :: String -> String -> FitPlugin
 propFilterFP fn name hole fits =
@@ -105,12 +129,16 @@ shouldFilterFP fn name hole fits =
                              fitStrs = fstrings, holeN = holeName hole,
                              holeL = hFile hole})
                  return fits
- 
-fp :: [CommandLineOption] -> FitPlugin
-fp [fn] hole hfs = case toHoleFitCommand hole of
-                  Just name | Just propName <- stripPrefix "prop_" name ->
-                      propFilterFP fn propName hole hfs
-                  Just name | Just shouldName <- stripPrefix "should_" name ->
-                      shouldFilterFP fn shouldName hole hfs
-                  _ -> return hfs
-fp _ _ hfs = return hfs
+
+fp :: [CommandLineOption] -> TcRef HolePluginState -> FitPlugin
+fp [fn] rf hole hfs =
+  do { r <- readTcRef rf
+     ; liftIO $ putStrLn ("fitP ref was: " ++ show r)
+     ; updTcRef rf bumpHPS
+     ; case toHoleFitCommand hole "with" of
+         Just name | Just propName <- stripPrefix "prop_" name ->
+                     propFilterFP fn propName hole hfs
+         Just name | Just shouldName <- stripPrefix "should_" name ->
+                     shouldFilterFP fn shouldName hole hfs
+         _ -> return hfs }
+fp _ _ _ hfs = return hfs
