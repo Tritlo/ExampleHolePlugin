@@ -7,20 +7,18 @@ import Prelude hiding (head, last)
 import Data.List (head, last)
 
 j :: [Int] -> Int
-j = _with_prop_isLength
+j = _only_Data_List
 
-prop_isLength :: ([Int] -> Int) -> Bool
-prop_isLength f = f [] == 0 && f [5,6] == 2
 
 k :: [Int] -> Int
-k = _with_prop_isHead
+k = _only_Prelude
 
-k3 = _a _b
 
-prop_isHead :: ([Int] -> Int) -> [Int] -> Bool
-prop_isHead f [] = True
-prop_isHead f (x:xs) = (f (x:xs)) == x
+l :: [Int] -> Int
+l = _invoke_hoogle
 
+m :: [Int] -> Int
+m = _invoke_djinn
 
 main :: IO ()
 main = print "hey"
