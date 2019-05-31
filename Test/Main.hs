@@ -1,4 +1,5 @@
-{-# OPTIONS -fplugin=HolePlugin -fplugin-opt=HolePlugin:out.fits -fno-show-type-app-of-hole-fits -fdefer-typed-holes #-}
+{-# OPTIONS -fplugin=HolePlugin -fplugin-opt=HolePlugin:/home/tritlo/.hoogle/default-haskell-5.0.17
+            -fno-show-type-app-of-hole-fits -fdefer-typed-holes #-}
 module Main where
 
 import Prelude hiding (head, last)
