@@ -1,27 +1,19 @@
-{-# OPTIONS -fplugin=HolePlugin -fplugin-opt=HolePlugin:10
-            -fno-show-type-app-of-hole-fits -fdefer-typed-holes #-}
+{-# OPTIONS -fplugin=HolePlugin
+            -fplugin-opt=HolePlugin:600
+            -funclutter-valid-hole-fits #-}
 module Main where
 
 import Prelude hiding (head, last)
 
 import Data.List (head, last)
 
-f :: [Int] -> Int
-f = _only_Data_List
+f, g, h, i, j :: [Int] -> Int
 
-
-g :: [Int] -> Int
-g = _only_Prelude
-
-
-h :: [Int] -> Int
-h = _default_sort
-
-i :: [Int] -> Int
-i = _sort_by_mod
-
-j :: [Int] -> Int
-j = _sort_by_mod_desc
+f = _too_long
+g = _only_Data_List
+h = _only_Prelude
+i = _sort_by_mod_desc
+j = _
 
 main :: IO ()
-main = print "hey"
+main = return ()
