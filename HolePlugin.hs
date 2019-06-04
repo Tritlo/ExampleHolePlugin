@@ -1,125 +1,106 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications, RecordWildCards #-}
 module HolePlugin where
 
 import GhcPlugins hiding ((<>))
 
-import Data.Coerce (coerce)
-
-
 import TcHoleErrors
 
-import Data.List (intersect, stripPrefix)
-import RdrName (importSpecModule)
+import Data.List (stripPrefix, sortOn)
 
 import TcRnTypes
 
-import System.Process
-
-import Data.Maybe (mapMaybe)
-
 import TcRnMonad
 
-import Json
+import Data.Time (UTCTime, NominalDiffTime)
+import qualified Data.Time as Time
 
-import Test.ProgInput
-
-import Data.Hashable
-
-import Debug.Trace
-
-import qualified Hoogle as Hoo
-
-plugin :: Plugin
-plugin = defaultPlugin { holeFitPlugin = hfp, pluginRecompile = purePlugin }
-
-hfp :: [CommandLineOption] -> Maybe HoleFitPluginR
-hfp opts = Just (HoleFitPluginR init plugin stop)
-  where init = intPlugin opts
-          --liftIO (putStrLn "initializing") >> newTcRef (coerce (0 :: Int))
-        stop = const (liftIO (putStrLn "stopping"))
-        plugin ref = HoleFitPlugin (candP opts ref) (fp opts ref)
+import Text.Read
 
 
-data HolePluginState = HPS { hpHoogle :: String -> [Hoo.Target] }
+data HolePluginState = HPS { timeAlloted :: Maybe NominalDiffTime
+                           , elapsedTime :: NominalDiffTime
+                           , timeCurStarted :: UTCTime }
+
+bumpElapsed :: NominalDiffTime -> HolePluginState -> HolePluginState
+bumpElapsed ad (HPS a e t) = HPS a (e + ad) t
+
+setAlloted :: Maybe NominalDiffTime -> HolePluginState -> HolePluginState
+setAlloted a (HPS _ e t) = HPS a e t
+
+setCurStarted :: UTCTime -> HolePluginState -> HolePluginState
+setCurStarted nt (HPS a e _) = HPS a e nt
+
+hpStartState :: UTCTime -> HolePluginState
+hpStartState = HPS Nothing zero
+  where zero = fromInteger @NominalDiffTime 0
 
 initPlugin :: [CommandLineOption] -> TcM (TcRef HolePluginState)
-initPlugin li = do
-  dbLoc <- case li of
-             [hoogleDb] -> return hoogleDb
-             _ -> liftIO $ Hoo.defaultDatabaseLocation
+initPlugin [msecs] = liftIO Time.getCurrentTime
+                  >>= (newTcRef . setAlloted alloted . hpStartState)
+  where
+    errMsg = "Invalid amount of milliseconds given to plugin: " <> show msecs
+    alloted = case readMaybe @Integer msecs of
+      Just millisecs -> Just $ fromInteger @NominalDiffTime millisecs / 1000
+      _ -> error errMsg
+initPlugin _ = liftIO Time.getCurrentTime >>= (newTcRef . hpStartState)
 
-  liftIO (putStrLn $ "Using Hoogle database: " <> hoogleDb)
-  dbSearch <- liftIO $ Hoo.withDatabase hoogleDb (pure . Hoo.searchDatabase)
-  newTcRef (HPS {hpHoogle = dbSearch })
+fromModule :: HoleFitCandidate -> [String]
+fromModule (GreHFCand gre) =
+  map (moduleNameString . importSpecModule) $ gre_imp gre
 
-
+fromModule _ = []
 toHoleFitCommand :: TypedHole -> String -> Maybe String
-toHoleFitCommand (TyH{holeCt = Just (CHoleCan _ h)}) str
+toHoleFitCommand TyH{holeCt = Just (CHoleCan _ h)} str
     = stripPrefix ("_" <> str) $ occNameString $ holeOcc h
 toHoleFitCommand _ _ = Nothing
-
-holeName :: TypedHole -> Maybe String
-holeName (TyH{holeCt = Just (CHoleCan _ h)})
-    = Just (occNameString $ holeOcc h)
-holeName _ = Nothing
-
 
 
 -- | This candidate plugin filters the candidates by module,
 --   using the name of the hole as module to search in
-candP :: [CommandLineOption] -> TcRef HolePluginState -> CandPlugin
-candP _ _ hole cands =
-  liftIO (putStrLn $ "candP invoked on " <> (show $ holeName hole)) >>
-  case toHoleFitCommand hole "only_" of
-    Just modName -> return $ filter (inScopeVia modName) cands
-    _ -> return cands
-   where inScopeVia modNameStr (GreHFCand gre) =
-           elem (toModName modNameStr) $
-             map (moduleNameString . importSpecModule) $ gre_imp gre
-         inScopeVia _ _ = False
-         toModName = replace '_' '.'
-
-replace :: Eq a => a -> a -> [a] -> [a]
-replace _ _ [] = []
-replace a b (x:xs) = (if x == a then b else x):replace a b xs
-
-
-fromMaybeNull :: Maybe String -> JsonDoc
-fromMaybeNull (Just s) = JSString s
-fromMaybeNull _ = JSNull
-
-
-hFile :: TypedHole -> Maybe String
-hFile (TyH { holeCt = Just (CHoleCan ev _)}) =
-   Just (unpackFS (srcSpanFile $ ctLocSpan (ctev_loc ev )))
-hFile _ = Nothing
-
-hfName :: HoleFit -> Maybe String
-hfName (RawHoleFit _) = Nothing
-hfName hf = Just $ getOccString $ hfCand hf
+modFilterTimeoutP :: [CommandLineOption] -> TcRef HolePluginState -> CandPlugin
+modFilterTimeoutP _ ref hole cands = do
+  curTime <- liftIO Time.getCurrentTime
+  HPS {..} <- readTcRef ref
+  updTcRef ref (setCurStarted curTime)
+  case timeAlloted of
+    Just sofar | elapsedTime > sofar -> do
+      -- If we're out of time, remove any candidates, so nothing is checked.
+      liftIO (putStrLn $ "Out of hole fit time! Elapsed: " <> show elapsedTime)
+      return []
+    _ -> case toHoleFitCommand hole "only_" of
+           Just modName -> return $ filter (inScopeVia modName) cands
+           _ -> return cands
+  where inScopeVia modNameStr cand@(GreHFCand _) =
+          elem (toModName modNameStr) $ fromModule cand
+        inScopeVia _ _ = False
+        toModName = replace '_' '.'
+        replace :: Eq a => a -> a -> [a] -> [a]
+        replace _ _ [] = []
+        replace a b (x:xs) = (if x == a then b else x):replace a b xs
 
 
-invokeHoogle :: TcRef HolePluginState -> FitPlugin
-invokeHoogle (HPS {hpHoogle = hoogl}) (TyH{holeCt = Just hole}) hfs = do
- flags <- getDynFlags
- let holeTyString :: Ct -> String
-     holeTyString = showSDoc dflags . ppr . ctPred
-     dispResult :: Hoo.Target -> HoleFit
-     dispResult = RawHoleFit . text . Hoo.targetResultDisplay False
-     results = map  dispResult $ hoogle $ holeTyString hole
- return (take 3 results)
-invokeHoogle _ _ hfs = const hfs
+modSortP :: [CommandLineOption] -> TcRef HolePluginState -> FitPlugin
+modSortP _ ref hole hfs = do
+  curTime <- liftIO Time.getCurrentTime
+  HPS {..} <- readTcRef ref
+  updTcRef ref $ bumpElapsed (Time.diffUTCTime curTime timeCurStarted)
+  return $ case toHoleFitCommand hole "sort_by_mod" of
+             -- If only_ is on, the fits will all be from the same module.
+             Just ('_':'d':'e':'s':'c':_) -> reverse hfs
+             Just _ -> orderByModule hfs
+             _ ->  hfs
+  where orderByModule :: [HoleFit] -> [HoleFit]
+        orderByModule = sortOn (fmap fromModule . mbHFCand)
+        mbHFCand :: HoleFit -> Maybe HoleFitCandidate
+        mbHFCand HoleFit {hfCand = c} = Just c
+        mbHFCand _ = Nothing
 
+plugin :: Plugin
+plugin = defaultPlugin { holeFitPlugin = holeFitP, pluginRecompile = purePlugin}
 
-invokeDjinn :: TcRef HolePluginState -> FitPlugin
-invokeDjinn _ _ hfs =
-  liftIO (putStrLn "djinn integration not implemented yet") >> return hfs
-
-
-fp :: [CommandLineOption] -> TcRef HolePluginState -> FitPlugin
-fp _ rf hole hfs =
-  do { case toHoleFitCommand hole "invoke_" of
-         Just ('h':'o':'o':'g':'l':'e':rest) -> invokeHoogle rf hole hfs
-         Just ('d':'j':'i':'n':'n':rest) -> invokeDjinn rf hole hfs
-         _ -> return hfs }
-fp _ _ _ hfs = return hfs
+holeFitP :: [CommandLineOption] -> Maybe HoleFitPluginR
+holeFitP opts = Just (HoleFitPluginR initP pluginDef stopP)
+  where initP = initPlugin opts
+        stopP = const $ return ()
+        pluginDef ref = HoleFitPlugin { candPlugin = modFilterTimeoutP opts ref
+                                      , fitPlugin  = modSortP opts ref }

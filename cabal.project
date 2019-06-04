@@ -2,6 +2,8 @@ packages: ./
           ./Test
 with-compiler: /home/tritlo/Code/gitlab-ghc/_build/stage1/bin/ghc
 
+allow-newer: all
+
 repository head.hackage
   url: http://head.hackage.haskell.org/
   secure: True
