@@ -7,13 +7,13 @@ import Prelude hiding (head, last)
 
 import Data.List (head, last)
 
-f, g, h, i, j :: [Int] -> Int
 
+f, g, h, i, j :: [Int] -> Int
 f = _too_long
+j = _
+i = _sort_by_mod_desc
 g = _only_Data_List
 h = _only_Prelude
-i = _sort_by_mod_desc
-j = _
 
 main :: IO ()
 main = return ()

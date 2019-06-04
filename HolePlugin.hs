@@ -30,46 +30,42 @@ setAlloted a (HPS _ e t) = HPS a e t
 setCurStarted :: UTCTime -> HolePluginState -> HolePluginState
 setCurStarted nt (HPS a e _) = HPS a e nt
 
-hpStartState :: UTCTime -> HolePluginState
-hpStartState = HPS Nothing zero
+hpStartState :: HolePluginState
+hpStartState = HPS Nothing zero undefined
   where zero = fromInteger @NominalDiffTime 0
 
 initPlugin :: [CommandLineOption] -> TcM (TcRef HolePluginState)
-initPlugin [msecs] = liftIO Time.getCurrentTime
-                  >>= (newTcRef . setAlloted alloted . hpStartState)
+initPlugin [msecs] = newTcRef $ hpStartState { timeAlloted = alloted }
   where
     errMsg = "Invalid amount of milliseconds given to plugin: " <> show msecs
     alloted = case readMaybe @Integer msecs of
       Just millisecs -> Just $ fromInteger @NominalDiffTime millisecs / 1000
       _ -> error errMsg
-initPlugin _ = liftIO Time.getCurrentTime >>= (newTcRef . hpStartState)
+initPlugin _ = newTcRef hpStartState
 
 fromModule :: HoleFitCandidate -> [String]
 fromModule (GreHFCand gre) =
   map (moduleNameString . importSpecModule) $ gre_imp gre
-
 fromModule _ = []
+
 toHoleFitCommand :: TypedHole -> String -> Maybe String
 toHoleFitCommand TyH{holeCt = Just (CHoleCan _ h)} str
     = stripPrefix ("_" <> str) $ occNameString $ holeOcc h
 toHoleFitCommand _ _ = Nothing
 
-
 -- | This candidate plugin filters the candidates by module,
---   using the name of the hole as module to search in
+-- using the name of the hole as module to search in
 modFilterTimeoutP :: [CommandLineOption] -> TcRef HolePluginState -> CandPlugin
 modFilterTimeoutP _ ref hole cands = do
   curTime <- liftIO Time.getCurrentTime
   HPS {..} <- readTcRef ref
   updTcRef ref (setCurStarted curTime)
-  case timeAlloted of
-    Just sofar | elapsedTime > sofar -> do
-      -- If we're out of time, remove any candidates, so nothing is checked.
-      liftIO (putStrLn $ "Out of hole fit time! Elapsed: " <> show elapsedTime)
-      return []
+  return $ case timeAlloted of
+    -- If we're out of time, remove any candidates, so nothing is checked.
+    Just sofar | elapsedTime > sofar -> []
     _ -> case toHoleFitCommand hole "only_" of
-           Just modName -> return $ filter (inScopeVia modName) cands
-           _ -> return cands
+          Just modName -> filter (inScopeVia modName) cands
+          _ -> cands
   where inScopeVia modNameStr cand@(GreHFCand _) =
           elem (toModName modNameStr) $ fromModule cand
         inScopeVia _ _ = False
@@ -78,22 +74,26 @@ modFilterTimeoutP _ ref hole cands = do
         replace _ _ [] = []
         replace a b (x:xs) = (if x == a then b else x):replace a b xs
 
-
 modSortP :: [CommandLineOption] -> TcRef HolePluginState -> FitPlugin
 modSortP _ ref hole hfs = do
   curTime <- liftIO Time.getCurrentTime
   HPS {..} <- readTcRef ref
   updTcRef ref $ bumpElapsed (Time.diffUTCTime curTime timeCurStarted)
-  return $ case toHoleFitCommand hole "sort_by_mod" of
-             -- If only_ is on, the fits will all be from the same module.
-             Just ('_':'d':'e':'s':'c':_) -> reverse hfs
-             Just _ -> orderByModule hfs
-             _ ->  hfs
+  return $ case timeAlloted of
+    -- If we're out of time, remove any candidates, so nothing is checked.
+    Just sofar | elapsedTime > sofar -> [RawHoleFit $ text msg]
+    _ -> case toHoleFitCommand hole "sort_by_mod" of
+            -- If only_ is on, the fits will all be from the same module.
+            Just ('_':'d':'e':'s':'c':_) -> reverse hfs
+            Just _ -> orderByModule hfs
+            _ ->  hfs
   where orderByModule :: [HoleFit] -> [HoleFit]
         orderByModule = sortOn (fmap fromModule . mbHFCand)
         mbHFCand :: HoleFit -> Maybe HoleFitCandidate
         mbHFCand HoleFit {hfCand = c} = Just c
         mbHFCand _ = Nothing
+        msg = "Error: The time ran out, and the search was aborted for this "
+           <> "hole. Try again with a longer timeout."
 
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = holeFitP, pluginRecompile = purePlugin}
