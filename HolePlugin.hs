@@ -81,7 +81,7 @@ modSortP _ ref hole hfs = do
   updTcRef ref $ bumpElapsed (Time.diffUTCTime curTime timeCurStarted)
   return $ case timeAlloted of
     -- If we're out of time, remove any candidates, so nothing is checked.
-    Just sofar | elapsedTime > sofar -> [RawHoleFit $ text msg]
+    Just sofar | elapsedTime > sofar -> [RawHoleFit msg]
     _ -> case toHoleFitCommand hole "sort_by_mod" of
             -- If only_ is on, the fits will all be from the same module.
             Just ('_':'d':'e':'s':'c':_) -> reverse hfs
@@ -92,8 +92,8 @@ modSortP _ ref hole hfs = do
         mbHFCand :: HoleFit -> Maybe HoleFitCandidate
         mbHFCand HoleFit {hfCand = c} = Just c
         mbHFCand _ = Nothing
-        msg = "Error: The time ran out, and the search was aborted for this "
-           <> "hole. Try again with a longer timeout."
+        msg = hang (text "Error: The time ran out, and the search was aborted for this hole.")
+               7 $ text "Try again with a longer timeout."
 
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = holeFitP, pluginRecompile = purePlugin}
