@@ -1,5 +1,5 @@
 {-# OPTIONS -fplugin=HolePlugin
-            -fplugin-opt=HolePlugin:600
+            -fplugin-opt=HolePlugin:4
             -funclutter-valid-hole-fits #-}
 module Main where
 
