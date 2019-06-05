@@ -5,78 +5,67 @@ import GhcPlugins hiding ((<>))
 
 import TcHoleErrors
 
-import Data.List (stripPrefix, sortOn)
-
 import TcRnTypes
 
 import TcRnMonad
 
-import Text.Read
+import DjinnBridge
+
+import ConLike(conLikeWrapId_maybe)
+import TcEnv (tcLookup)
+import Data.Maybe (catMaybes)
 
 
 
-data HolePluginState = HPS { holesChecked :: Int
-                           , holesLimit :: Maybe Int}
+data HolePluginState = HPS { djinnEnv :: Environment
+                           , maxSols :: MaxSolutions
+                           , microSecs :: Int}
 
-bumpHolesChecked :: HolePluginState -> HolePluginState
-bumpHolesChecked (HPS h l) = HPS (h + 1) l
+setDjinnEnv :: Environment -> HolePluginState -> HolePluginState
+setDjinnEnv e (HPS _ sols secs)  = HPS e sols secs
 
 initPlugin :: [CommandLineOption] -> TcM (TcRef HolePluginState)
-initPlugin [limit] = newTcRef $ HPS 0 $
-  case readMaybe @Int limit of
-      Just number ->  Just number
-      _ -> error $ "Invalid argument to plugin: " <> show limit
-initPlugin _ = newTcRef $ HPS 0 Nothing
-
-fromModule :: HoleFitCandidate -> [String]
-fromModule (GreHFCand gre) =
-  map (moduleNameString . importSpecModule) $ gre_imp gre
-fromModule _ = []
-
-toHoleFitCommand :: TypedHole -> String -> Maybe String
-toHoleFitCommand TyH{holeCt = Just (CHoleCan _ h)} str
-    = stripPrefix ("_" <> str) $ occNameString $ holeOcc h
-toHoleFitCommand _ _ = Nothing
+-- initPlugin [microsecs] =
+--   newTcRef $ HPS [] (Max 15) (read @Int microsecs)
+-- initPlugin [microsecs, maxsols] =
+--   newTcRef $ HPS [] (Max $ read @Int maxsols) (read @Int microsecs)
+initPlugin _ = newTcRef $ HPS [] (Max 6) (100000 :: Int)
 
 
--- | This candidate plugin filters the candidates by module,
---   using the name of the hole as module to search in
-modFilterTimeoutP :: [CommandLineOption] -> TcRef HolePluginState -> CandPlugin
-modFilterTimeoutP _ ref hole cands = do
-  updTcRef ref bumpHolesChecked
+-- | Adds the current candidates to scope in djinn.
+djinnAddToScopeP :: [CommandLineOption] -> TcRef HolePluginState -> CandPlugin
+djinnAddToScopeP _ ref _ cands = do
+  newEnv <- catMaybes <$> mapM hfLookup cands
+  --liftIO $ print $ map (showSDocUnsafe . ppr) newEnv
+  updTcRef ref (setDjinnEnv newEnv)
+  return []
+  where hfLookup :: HoleFitCandidate -> TcM (Maybe (Name,Type))
+        hfLookup hfc = tryTcDiscardingErrs (return Nothing) $ do
+          let name = getName hfc
+          thing <- tcLookup name
+          let thingId = case thing of
+                          ATcId {tct_id = i} ->  Just i
+                          AGlobal (AnId i)   ->  Just i
+                          AGlobal (AConLike con) -> conLikeWrapId_maybe con
+                          _ -> Nothing
+          case thingId of
+            Just i -> return $ Just (name, idType i)
+            _ -> return Nothing
+
+
+djinnSynthP :: [CommandLineOption] -> TcRef HolePluginState -> FitPlugin
+djinnSynthP _ ref TyH{implics = imps, holeCt = Just holeCt} _ = do
   HPS {..} <- readTcRef ref
-  return $ case holesLimit of
-    -- If we're out of checks, remove any candidates, so nothing is checked.
-    Just limit | holesChecked > limit -> []
-    _ -> case toHoleFitCommand hole "only_" of
-           Just modName -> filter (inScopeVia modName) cands
-           _ -> cands
-  where inScopeVia modNameStr cand@(GreHFCand _) =
-          elem (toModName modNameStr) $ fromModule cand
-        inScopeVia _ _ = False
-        toModName = replace '_' '.'
-        replace :: Eq a => a -> a -> [a] -> [a]
-        replace _ _ [] = []
-        replace a b (x:xs) = (if x == a then b else x):replace a b xs
+  let wrappedType = foldl wrapTypeWithImplication (ctPred holeCt) imps
+  --liftIO $ print $ map (showSDocUnsafe . ppr) djinnEnv
+  -- liftIO $ print (showSDocUnsafe . ppr $ wrappedType)
+  sols <- djinn True djinnEnv wrappedType maxSols microSecs
+          -- We could set '-fdefer-typed-holes'  and load the module here...
+          -- modInfo <- moduleInfo <$>
+  return $ map (RawHoleFit . parens . text .
+                            unwords . words . unwords . lines ) sols
 
-
-modSortP :: [CommandLineOption] -> TcRef HolePluginState -> FitPlugin
-modSortP _ ref hole hfs = do
-  HPS {..} <- readTcRef ref
-  return $ case holesLimit of
-    Just limit | holesChecked > limit -> [RawHoleFit $ text msg]
-    _ -> case toHoleFitCommand hole "sort_by_mod" of
-            -- If only_ is on, the fits will all be from the same module.
-           Just ('_':'d':'e':'s':'c':_) -> reverse hfs
-           Just _ -> orderByModule hfs
-           _ ->  hfs
-  where orderByModule :: [HoleFit] -> [HoleFit]
-        orderByModule = sortOn (fmap fromModule . mbHFCand)
-        mbHFCand :: HoleFit -> Maybe HoleFitCandidate
-        mbHFCand HoleFit {hfCand = c} = Just c
-        mbHFCand _ = Nothing
-        msg = "Error: Too many holes were checked, and the search aborted for"
-            <> "this hole. Try again with a higher limit."
+djinnSynthP _ _ _ _ = return []
 
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = holeFitP, pluginRecompile = purePlugin}
@@ -85,5 +74,5 @@ holeFitP :: [CommandLineOption] -> Maybe HoleFitPluginR
 holeFitP opts = Just (HoleFitPluginR initP pluginDef stopP)
   where initP = initPlugin opts
         stopP = const $ return ()
-        pluginDef ref = HoleFitPlugin { candPlugin = modFilterTimeoutP opts ref
-                                      , fitPlugin  = modSortP opts ref }
+        pluginDef ref = HoleFitPlugin { candPlugin = djinnAddToScopeP opts ref
+                                      , fitPlugin  = djinnSynthP opts ref }
