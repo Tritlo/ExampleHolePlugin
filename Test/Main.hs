@@ -10,6 +10,8 @@ g = _
 h :: Int -> Int
 h = _
 
+i :: (a,b) -> a
+i = _
 
 main :: IO ()
 main = return ()

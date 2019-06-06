@@ -23,10 +23,11 @@ g = _
 h :: Int -> Int
 h = _
 
+i :: (a,b) -> a
+i = _
 
 main :: IO ()
 main = return ()
-
 ```
 
 
@@ -66,10 +67,10 @@ Main.hs:8:5: error:
       Valid hole fits include
         (\ _ a -> a)
         (\ _ a -> seq (head (cycle (([]) ++ ([])))) a)
+        (\ _ a -> snd (head (cycle (([]) ++ ([]))), a))
+        (\ _ a -> snd (head (cycle (([]) ++ ([]))), a))
         (\ _ a -> seq (head (cycle (([]) ++ ([])))) a)
         (\ _ a -> a)
-        (\ _ a -> maybe a (\ _ -> maybe a (\ _ -> seq (head (cycle (([]) ++ ([])))) a) (Just (head (cycle (([]) ++ ([])))))) (Just (head (cycle (([]) ++ ([]))))))
-        (\ _ a -> maybe a (\ _ -> maybe a (\ _ -> seq (head (cycle (([]) ++ ([])))) a) (Just (head (cycle (([]) ++ ([])))))) (Just (head (cycle (([]) ++ ([]))))))
   |
 8 | g = _
   |     ^
@@ -85,5 +86,26 @@ Main.hs:11:5: error:
         (\ a -> a)
    |
 11 | h = _
+   |     ^
+
+Main.hs:14:5: error:
+    • Found hole: _ :: (a, b) -> a
+      Where: ‘b’, ‘a’ are rigid type variables bound by
+               the type signature for:
+                 i :: forall a b. (a, b) -> a
+               at Main.hs:13:1-15
+    • In the expression: _
+      In an equation for ‘i’: i = _
+    • Relevant bindings include
+        i :: (a, b) -> a (bound at Main.hs:14:1)
+      Valid hole fits include
+        (\ (a, _) -> a)
+        (\ (_, a) -> fst (head (cycle (([]) ++ ([]))), a))
+        (\ (_, a) -> const (head (cycle (([]) ++ ([])))) a)
+        (\ (_, a) -> const (head (cycle (([]) ++ ([])))) a)
+        (\ (_, a) -> fst (head (cycle (([]) ++ ([]))), a))
+        (\ (a, _) -> a)
+   |
+14 | i = _
    |     ^
 ```

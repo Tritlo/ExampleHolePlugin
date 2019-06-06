@@ -23,10 +23,8 @@ import qualified Type as G
 
 import Data.Maybe (mapMaybe, catMaybes, isJust)
 
-import Debug.Trace
 
 data NoExtraInfo = NoExtraInfo
-  deriving  (Show)
 type HEnvironment1 a = [(D.HSymbol, ([D.HSymbol], D.HType, a))]
 type HEnvironment = HEnvironment1 NoExtraInfo
 
@@ -40,27 +38,25 @@ getConTs t | Just (t1,t2) <- G.splitAppTy_maybe t    = getConTs t1 `union` getCo
 getConTs t | Just _       <- G.getTyVar_maybe t      = empty
 getConTs _                                           = empty
 
-traceT t = trace (GP.showSDocUnsafe $ GP.ppr t) t
-
 mbHType :: G.Type -> Maybe D.HType
 mbHType t | Just (_, i)  <- G.splitForAllTy_maybe t = mbHType  i
 mbHType t | Just (t1,t2) <- G.splitFunTy_maybe t    = do ht1 <- mbHType t1
                                                          ht2 <- mbHType t2
                                                          return $ D.HTArrow ht1 ht2
-mbHType t | Just (t1,t2) <- G.splitAppTy_maybe t  = do ht1 <- mbHType t1
-                                                       ht2 <- mbHType t2
-                                                       return $ D.HTApp ht1 ht2
 mbHType t | Just (c, ts) <- G.splitTyConApp_maybe t = do
               args <- mapM mbHType ts
               if G.isTupleTyCon c  -- Check if we have a tuple
                 then if not (null args)
                      then Just $ D.HTTuple args
-                     -- This case causes the show instance in Djinn to
-                     -- fail, so we drop it.
+                     -- The unit constructor () is also a tupeTyCon, but this case
+                     -- causes the show instance in Djinn to fail, so we drop it.
                      else Nothing
                 else Just $ createHTApp (G.getOccString c) (reverse args)
   where createHTApp n []     = D.HTCon n
         createHTApp n (x:xs) = D.HTApp (createHTApp n xs) x
+mbHType t | Just (t1,t2) <- G.splitAppTy_maybe t  = do ht1 <- mbHType t1
+                                                       ht2 <- mbHType t2
+                                                       return $ D.HTApp ht1 ht2
 mbHType t | Just var <- G.getTyVar_maybe t          = Just $ D.HTVar (toHSymbol var)
 mbHType _                                           = Nothing
 
