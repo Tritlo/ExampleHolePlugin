@@ -1,0 +1,3 @@
+packages: ./
+          ./test
+with-compiler: /home/tritlo/Code/ghc/inplace/bin/ghc-stage2
