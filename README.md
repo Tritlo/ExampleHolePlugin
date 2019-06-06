@@ -1,111 +1,97 @@
 ExampleHolePlugin
 =================
 
+Note! Needs to a custom branch of GHC [currently in submission](https://phabricator.haskell.org/D5373).
 
-This hole plugin shows how `djinn` can be invoked by a hole fit plugin to synthesize simple programs.
-Note! Needs to a custom branch of GHC [currently in submission](https://gitlab.haskell.org/ghc/ghc/merge_requests/153).
+An example of a hole fit plugin for GHC that can filter by module and 
+searches the local Hoogle for fits (if hoogle is available, and the 
+`-fplugin-opt=HolePlugin:hoogle` is set).
 
-Example Output
------------------
+make sure that `hoogle` is installed (for demo of hoogle features)
+and that the local hoogle database has been generated (with `hoogle generate`)
 
-Using this plugin, you can compile the following:
+then, build with
+
+```
+  cabal new-build test
+```
+
+and modify `test/Main.hs` to try it out (or run it on your own files).
+
+
+
+Example Output:
+---------------
+
+
+When run on:
 
 ```haskell
-{-# OPTIONS -fplugin=HolePlugin -funclutter-valid-hole-fits #-}
+{-# OPTIONS -fplugin=HolePlugin -fplugin-opt=HolePlugin:hoogle #-}
+-- Make sure to remove the hoogle opt if hoogle is not available locally
 module Main where
 
-f :: a  -> a
-f = _
+import Prelude hiding (head, last)
 
-g :: a -> b -> b
-g = _
+import Data.List (head, last)
 
-h :: Int -> Int
-h = _
+t :: [Int] -> Int
+t = _module_Prelude
 
-i :: (a,b) -> a
-i = _
+g :: [Int] -> Int
+g = _module_Data_List
 
 main :: IO ()
-main = return ()
+main = print $ t [1,2,3]
 ```
 
-
-And get the following output:
+the output is:
 
 ```
-
-Main.hs:5:5: error:
-    • Found hole: _ :: a -> a
-      Where: ‘a’ is a rigid type variable bound by
-               the type signature for:
-                 f :: forall a. a -> a
-               at Main.hs:4:1-12
-    • In the expression: _
-      In an equation for ‘f’: f = _
-    • Relevant bindings include f :: a -> a (bound at Main.hs:5:1)
-      Valid hole fits include
-        (\ a -> a)
-        (\ a -> a)
-        (\ _ -> last (init (head (cycle (([]) ++ ([]))) : cycle (([]) ++ ([])))))
-        (\ _ -> asTypeOf (head (cycle (([]) ++ ([])))) (id (head (cycle (([]) ++ ([]))))))
-        (\ _ -> id (head (cycle (([]) ++ ([])))))
-        (\ _ -> head (cycle (([]) ++ ([]))))
-  |
-5 | f = _
-  |     ^
-
-Main.hs:8:5: error:
-    • Found hole: _ :: a -> b -> b
-      Where: ‘a’, ‘b’ are rigid type variables bound by
-               the type signature for:
-                 g :: forall a b. a -> b -> b
-               at Main.hs:7:1-16
-    • In the expression: _
-      In an equation for ‘g’: g = _
-    • Relevant bindings include g :: a -> b -> b (bound at Main.hs:8:1)
-      Valid hole fits include
-        (\ _ a -> a)
-        (\ _ a -> seq (head (cycle (([]) ++ ([])))) a)
-        (\ _ a -> snd (head (cycle (([]) ++ ([]))), a))
-        (\ _ a -> snd (head (cycle (([]) ++ ([]))), a))
-        (\ _ a -> seq (head (cycle (([]) ++ ([])))) a)
-        (\ _ a -> a)
-  |
-8 | g = _
-  |     ^
-
-Main.hs:11:5: error:
-    • Found hole: _ :: Int -> Int
-    • In the expression: _
-      In an equation for ‘h’: h = _
-    • Relevant bindings include h :: Int -> Int (bound at Main.hs:11:1)
-      Valid hole fits include
-        (\ a -> a)
-        (\ a -> a)
-        (\ a -> a)
-   |
-11 | h = _
-   |     ^
-
 Main.hs:14:5: error:
-    • Found hole: _ :: (a, b) -> a
-      Where: ‘b’, ‘a’ are rigid type variables bound by
-               the type signature for:
-                 i :: forall a b. (a, b) -> a
-               at Main.hs:13:1-15
-    • In the expression: _
-      In an equation for ‘i’: i = _
+    • Found hole: _module_Prelude :: [Int] -> Int
+      Or perhaps ‘_module_Prelude’ is mis-spelled, or not in scope
+    • In the expression: _module_Prelude
+      In an equation for ‘t’: t = _module_Prelude
     • Relevant bindings include
-        i :: (a, b) -> a (bound at Main.hs:14:1)
+        t :: [Int] -> Int (bound at Main.hs:14:1)
       Valid hole fits include
-        (\ (a, _) -> a)
-        (\ (_, a) -> fst (head (cycle (([]) ++ ([]))), a))
-        (\ (_, a) -> const (head (cycle (([]) ++ ([])))) a)
-        (\ (_, a) -> const (head (cycle (([]) ++ ([])))) a)
-        (\ (_, a) -> fst (head (cycle (([]) ++ ([]))), a))
-        (\ (a, _) -> a)
+        Hoogle says: GHC.List length :: [a] -> Int
+        Hoogle says: GHC.OldList length :: [a] -> Int
+        t :: [Int] -> Int (bound at Main.hs:14:1)
+        g :: [Int] -> Int (bound at Main.hs:17:1)
+        length :: forall (t :: * -> *) a. Foldable t => t a -> Int
+          with length @[] @Int
+          (imported from ‘Prelude’ at Main.hs:5:1-34
+           (and originally defined in ‘Data.Foldable’))
+        maximum :: forall (t :: * -> *) a. (Foldable t, Ord a) => t a -> a
+          with maximum @[] @Int
+          (imported from ‘Prelude’ at Main.hs:5:1-34
+           (and originally defined in ‘Data.Foldable’))
+        (Some hole fits suppressed; use -fmax-valid-hole-fits=N or -fno-max-valid-hole-fits)
    |
-14 | i = _
-   |     ^
+14 | t = _module_Prelude
+   |     ^^^^^^^^^^^^^^^
+
+Main.hs:17:5: error:
+    • Found hole: _module_Data_List :: [Int] -> Int
+      Or perhaps ‘_module_Data_List’ is mis-spelled, or not in scope
+    • In the expression: _module_Data_List
+      In an equation for ‘g’: g = _module_Data_List
+    • Relevant bindings include
+        g :: [Int] -> Int (bound at Main.hs:17:1)
+      Valid hole fits include
+        Hoogle says: GHC.List length :: [a] -> Int
+        Hoogle says: GHC.OldList length :: [a] -> Int
+        g :: [Int] -> Int (bound at Main.hs:17:1)
+        head :: forall a. [a] -> a
+          with head @Int
+          (imported from ‘Data.List’ at Main.hs:7:19-22
+           (and originally defined in ‘GHC.List’))
+        last :: forall a. [a] -> a
+          with last @Int
+          (imported from ‘Data.List’ at Main.hs:7:25-28
+           (and originally defined in ‘GHC.List’))
+   |
+17 | g = _module_Data_List
 ```

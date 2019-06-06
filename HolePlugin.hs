@@ -1,78 +1,58 @@
-{-# LANGUAGE TypeApplications, RecordWildCards #-}
 module HolePlugin where
 
-import GhcPlugins hiding ((<>))
+import GhcPlugins
 
 import TcHoleErrors
 
+import Data.List (intersect, stripPrefix)
+import RdrName (importSpecModule)
+
 import TcRnTypes
 
-import TcRnMonad
-
-import DjinnBridge
-
-import ConLike(conLikeWrapId_maybe)
-import TcEnv (tcLookup)
-import Data.Maybe (catMaybes)
-
-
-
-data HolePluginState = HPS { djinnEnv :: Environment
-                           , maxSols :: MaxSolutions
-                           , microSecs :: Int}
-
-setDjinnEnv :: Environment -> HolePluginState -> HolePluginState
-setDjinnEnv e (HPS _ sols secs)  = HPS e sols secs
-
-initPlugin :: [CommandLineOption] -> TcM (TcRef HolePluginState)
--- initPlugin [microsecs] =
---   newTcRef $ HPS [] (Max 15) (read @Int microsecs)
--- initPlugin [microsecs, maxsols] =
---   newTcRef $ HPS [] (Max $ read @Int maxsols) (read @Int microsecs)
-initPlugin _ = newTcRef $ HPS [] (Max 6) (100000 :: Int)
-
-
--- | Adds the current candidates to scope in djinn.
-djinnAddToScopeP :: [CommandLineOption] -> TcRef HolePluginState -> CandPlugin
-djinnAddToScopeP _ ref _ cands = do
-  newEnv <- catMaybes <$> mapM hfLookup cands
-  --liftIO $ print $ map (showSDocUnsafe . ppr) newEnv
-  updTcRef ref (setDjinnEnv newEnv)
-  return []
-  where hfLookup :: HoleFitCandidate -> TcM (Maybe (Name,Type))
-        hfLookup hfc = tryTcDiscardingErrs (return Nothing) $ do
-          let name = getName hfc
-          thing <- tcLookup name
-          let thingId = case thing of
-                          ATcId {tct_id = i} ->  Just i
-                          AGlobal (AnId i)   ->  Just i
-                          AGlobal (AConLike con) -> conLikeWrapId_maybe con
-                          _ -> Nothing
-          case thingId of
-            Just i -> return $ Just (name, idType i)
-            _ -> return Nothing
-
-
-djinnSynthP :: [CommandLineOption] -> TcRef HolePluginState -> FitPlugin
-djinnSynthP _ ref TyH{implics = imps, holeCt = Just holeCt} _ = do
-  HPS {..} <- readTcRef ref
-  let wrappedType = foldl wrapTypeWithImplication (ctPred holeCt) imps
-  --liftIO $ print $ map (showSDocUnsafe . ppr) djinnEnv
-  -- liftIO $ print (showSDocUnsafe . ppr $ wrappedType)
-  sols <- djinn True djinnEnv wrappedType maxSols microSecs
-          -- We could set '-fdefer-typed-holes'  and load the module here...
-          -- modInfo <- moduleInfo <$>
-  return $ map (RawHoleFit . parens . text .
-                            unwords . words . unwords . lines ) sols
-
-djinnSynthP _ _ _ _ = return []
+import System.Process
 
 plugin :: Plugin
-plugin = defaultPlugin { holeFitPlugin = holeFitP, pluginRecompile = purePlugin}
+plugin = defaultPlugin { holeFitPlugin = hfp, pluginRecompile = purePlugin }
 
-holeFitP :: [CommandLineOption] -> Maybe HoleFitPluginR
-holeFitP opts = Just (HoleFitPluginR initP pluginDef stopP)
-  where initP = initPlugin opts
-        stopP = const $ return ()
-        pluginDef ref = HoleFitPlugin { candPlugin = djinnAddToScopeP opts ref
-                                      , fitPlugin  = djinnSynthP opts ref }
+hfp :: [CommandLineOption] -> Maybe HoleFitPlugin
+hfp opts = Just (HoleFitPlugin (candP opts) (fp opts))
+
+toFilter :: Maybe String -> Maybe String
+toFilter = flip (>>=) (stripPrefix "_module_")
+
+replace :: Eq a => a -> a -> [a] -> [a]
+replace match repl str = replace' [] str
+  where
+    replace' sofar (x:xs) | x == match = replace' (repl:sofar) xs
+    replace' sofar (x:xs) = replace' (x:sofar) xs
+    replace' sofar [] = reverse sofar
+
+-- | This candidate plugin filters the candidates by module,
+--   using the name of the hole as module to search in
+candP :: [CommandLineOption] -> CandPlugin
+candP _ hole cands =
+  do let he = case holeCt hole of
+                Just (CHoleCan _ h) -> Just (occNameString $ holeOcc h)
+                _ -> Nothing
+     case toFilter he of
+        Just undscModName -> do let replaced = replace '_' '.' undscModName
+                                let res = filter (greNotInOpts [replaced]) cands
+                                return $ res 
+        _ -> return cands
+  where greNotInOpts opts (GreHFCand gre)  = not $ null $ intersect (inScopeVia gre) opts
+        greNotInOpts _ _ = True
+        inScopeVia = map (moduleNameString . importSpecModule) . gre_imp
+
+-- Yes, it's pretty hacky, but it is just an example :)
+searchHoogle :: String -> IO [String]
+searchHoogle ty = lines <$> (readProcess "hoogle" [(show ty)] [])
+
+fp :: [CommandLineOption] -> FitPlugin
+fp ("hoogle":[]) hole hfs =
+    do dflags <- getDynFlags
+       let tyString = showSDoc dflags . ppr . ctPred <$> holeCt hole
+       res <- case tyString of
+                Just ty -> liftIO $ searchHoogle ty
+                _ -> return []
+       return $ (take 2 $ map (RawHoleFit [] Nothing . text .("Hoogle says: " ++)) res) ++ hfs
+fp _ _ hfs = return hfs
