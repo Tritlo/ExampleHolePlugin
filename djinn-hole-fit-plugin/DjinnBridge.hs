@@ -1,4 +1,5 @@
---- Based on djinn-ghc by Alejandro Serrano
+--- Based on djinn-ghc by Alejandro Serrano, but reworked to use TcM directly.
+
 {-# LANGUAGE CPP, PatternGuards, BangPatterns #-}
 module DjinnBridge (Environment, MaxSolutions(..), djinn) where
 

@@ -1,10 +1,10 @@
-ExampleHolePlugin
+Hoogle Plugin
 =================
 
 Note! Needs to a custom branch of GHC [currently in submission](https://phabricator.haskell.org/D5373).
 
-An example of a hole fit plugin for GHC that can filter by module and 
-searches the local Hoogle for fits (if hoogle is available, and the 
+An example of a hole fit plugin for GHC that can filter by module and
+searches the local Hoogle for fits (if hoogle is available, and the
 `-fplugin-opt=HolePlugin:hoogle` is set).
 
 make sure that `hoogle` is installed (for demo of hoogle features)
