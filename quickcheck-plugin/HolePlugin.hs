@@ -25,17 +25,17 @@ import Data.Hashable
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = hfp, pluginRecompile = purePlugin }
 
-hfp :: [CommandLineOption] -> Maybe HoleFitPlugin
-hfp opts = Just (HoleFitPlugin (candP opts) (fp opts))
+hfp :: [CommandLineOption] -> Maybe HoleFitPluginR
+hfp opts = Just (fromPureHFPlugin $ HoleFitPlugin (candP opts) (fp opts))
 
 
 toHoleFitCommand :: TypedHole -> Maybe String
-toHoleFitCommand (TyH{holeCt = Just (CHoleCan _ h)})
+toHoleFitCommand (TyH{tyHCt = Just (CHoleCan _ h)})
     = stripPrefix "_with_" (occNameString $ holeOcc h)
 toHoleFitCommand _ = Nothing
 
 holeName :: TypedHole -> Maybe String
-holeName (TyH{holeCt = Just (CHoleCan _ h)})
+holeName (TyH{tyHCt = Just (CHoleCan _ h)})
     = Just (occNameString $ holeOcc h)
 holeName _ = Nothing
 
@@ -74,7 +74,7 @@ fromMaybeNull _ = JSNull
 
 
 hFile :: TypedHole -> Maybe String
-hFile (TyH { holeCt = Just (CHoleCan ev _)}) =
+hFile (TyH { tyHCt = Just (CHoleCan ev _)}) =
    Just (unpackFS (srcSpanFile $ ctLocSpan (ctev_loc ev )))
 hFile _ = Nothing
 

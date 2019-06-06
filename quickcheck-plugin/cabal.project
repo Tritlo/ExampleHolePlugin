@@ -1,6 +1,6 @@
 packages: ./
           ./Test
-with-compiler: /home/tritlo/Code/ghc/inplace/bin/ghc-stage2
+with-compiler: /home/tritlo/Code/gitlab-ghc/_build/stage1/bin/ghc
 
 repository head.hackage
   url: http://head.hackage.haskell.org/

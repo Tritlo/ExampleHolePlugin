@@ -54,7 +54,7 @@ djinnAddToScopeP _ ref _ cands = do
 
 
 djinnSynthP :: [CommandLineOption] -> TcRef HolePluginState -> FitPlugin
-djinnSynthP _ ref TyH{implics = imps, holeCt = Just holeCt} _ = do
+djinnSynthP _ ref TyH{tyHImplics = imps, tyHCt = Just holeCt} _ = do
   HPS {..} <- readTcRef ref
   let wrappedType = foldl wrapTypeWithImplication (ctPred holeCt) imps
   --liftIO $ print $ map (showSDocUnsafe . ppr) djinnEnv
