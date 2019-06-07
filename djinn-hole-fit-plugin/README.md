@@ -14,7 +14,7 @@ Example Output
 Using this plugin, you can compile the following:
 
 ```haskell
-{-# OPTIONS -fplugin=HolePlugin -funclutter-valid-hole-fits #-}
+{-# OPTIONS -fplugin=DjinnPlugin -funclutter-valid-hole-fits #-}
 module Main where
 
 f :: a  -> a

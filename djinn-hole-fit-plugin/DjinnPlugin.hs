@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeApplications, RecordWildCards #-}
-module HolePlugin where
+module DjinnPlugin where
 
 import GhcPlugins hiding ((<>))
 

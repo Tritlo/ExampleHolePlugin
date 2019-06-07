@@ -1,4 +1,4 @@
-name: HolePlugin
+name: DjinnPlugin
 cabal-version: >= 1.24
 build-type: Simple
 version: 1.0.0
@@ -7,5 +7,5 @@ version: 1.0.0
 library
   default-language: Haskell2010
   build-depends: base, ghc, time, djinn-lib, containers, async
-  exposed-modules: HolePlugin, DjinnBridge
+  exposed-modules: DjinnPlugin, DjinnBridge
   ghc-options: -Wall

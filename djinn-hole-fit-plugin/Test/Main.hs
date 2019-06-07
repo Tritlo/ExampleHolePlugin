@@ -1,4 +1,4 @@
-{-# OPTIONS -fplugin=HolePlugin -funclutter-valid-hole-fits #-}
+{-# OPTIONS -fplugin=DjinnPlugin -funclutter-valid-hole-fits #-}
 module Main where
 
 f :: a  -> a
