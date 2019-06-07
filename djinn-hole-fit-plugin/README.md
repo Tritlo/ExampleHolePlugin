@@ -23,11 +23,12 @@ f = _
 g :: a -> b -> b
 g = _
 
-h :: Int -> Int
-h = _
-
 i :: (a,b) -> a
 i = _
+
+j :: a -> a -> a
+j = _
+
 
 main :: IO ()
 main = return ()
@@ -37,7 +38,6 @@ main = return ()
 And get the following output:
 
 ```
-
 Main.hs:5:5: error:
     • Found hole: _ :: a -> a
       Where: ‘a’ is a rigid type variable bound by
@@ -49,11 +49,10 @@ Main.hs:5:5: error:
     • Relevant bindings include f :: a -> a (bound at Main.hs:5:1)
       Valid hole fits include
         (\ a -> a)
-        (\ a -> a)
-        (\ _ -> last (init (head (cycle (([]) ++ ([]))) : cycle (([]) ++ ([])))))
-        (\ _ -> asTypeOf (head (cycle (([]) ++ ([])))) (id (head (cycle (([]) ++ ([]))))))
-        (\ _ -> id (head (cycle (([]) ++ ([])))))
         (\ _ -> head (cycle (([]) ++ ([]))))
+        (\ _ -> id (head (cycle (([]) ++ ([])))))
+        f :: a -> a
+        id :: forall a. a -> a
   |
 5 | f = _
   |     ^
@@ -71,44 +70,52 @@ Main.hs:8:5: error:
         (\ _ a -> a)
         (\ _ a -> seq (head (cycle (([]) ++ ([])))) a)
         (\ _ a -> snd (head (cycle (([]) ++ ([]))), a))
-        (\ _ a -> snd (head (cycle (([]) ++ ([]))), a))
-        (\ _ a -> seq (head (cycle (([]) ++ ([])))) a)
-        (\ _ a -> a)
+        g :: a -> b -> b
+        seq :: forall a b. a -> b -> b
   |
 8 | g = _
   |     ^
 
 Main.hs:11:5: error:
-    • Found hole: _ :: Int -> Int
-    • In the expression: _
-      In an equation for ‘h’: h = _
-    • Relevant bindings include h :: Int -> Int (bound at Main.hs:11:1)
-      Valid hole fits include
-        (\ a -> a)
-        (\ a -> a)
-        (\ a -> a)
-   |
-11 | h = _
-   |     ^
-
-Main.hs:14:5: error:
     • Found hole: _ :: (a, b) -> a
       Where: ‘b’, ‘a’ are rigid type variables bound by
                the type signature for:
                  i :: forall a b. (a, b) -> a
-               at Main.hs:13:1-15
+               at Main.hs:10:1-15
     • In the expression: _
       In an equation for ‘i’: i = _
     • Relevant bindings include
-        i :: (a, b) -> a (bound at Main.hs:14:1)
+        i :: (a, b) -> a (bound at Main.hs:11:1)
       Valid hole fits include
         (\ (a, _) -> a)
-        (\ (_, a) -> fst (head (cycle (([]) ++ ([]))), a))
-        (\ (_, a) -> const (head (cycle (([]) ++ ([])))) a)
-        (\ (_, a) -> const (head (cycle (([]) ++ ([])))) a)
-        (\ (_, a) -> fst (head (cycle (([]) ++ ([]))), a))
-        (\ (a, _) -> a)
+        (\ _ -> head (cycle (([]) ++ ([]))))
+        (\ _ -> f (head (cycle (([]) ++ ([])))))
+        i :: (a, b) -> a
+        fst :: forall a b. (a, b) -> a
    |
-14 | i = _
+11 | i = _
    |     ^
+
+Main.hs:14:5: error:
+    • Found hole: _ :: a -> a -> a
+      Where: ‘a’ is a rigid type variable bound by
+               the type signature for:
+                 j :: forall a. a -> a -> a
+               at Main.hs:13:1-16
+    • In the expression: _
+      In an equation for ‘j’: j = _
+    • Relevant bindings include
+        j :: a -> a -> a (bound at Main.hs:14:1)
+      Valid hole fits include
+        (\ _ a -> a)
+        (\ a _ -> a)
+        (\ _ _ -> head (cycle (([]) ++ ([]))))
+        j :: a -> a -> a
+        g :: forall a b. a -> b -> b
+        seq :: forall a b. a -> b -> b
+        (Some hole fits suppressed; use -fmax-valid-hole-fits=N or -fno-max-valid-hole-fits)
+   |
+14 | j = _
+   |     ^
+
 ```

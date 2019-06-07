@@ -7,11 +7,12 @@ f = _
 g :: a -> b -> b
 g = _
 
-h :: Int -> Int
-h = _
-
 i :: (a,b) -> a
 i = _
+
+j :: a -> a -> a
+j = _
+
 
 main :: IO ()
 main = return ()
