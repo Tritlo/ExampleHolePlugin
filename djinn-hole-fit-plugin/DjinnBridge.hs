@@ -32,9 +32,10 @@ type HEnvironment = HEnvironment1 NoExtraInfo
 getConTs :: G.Type -> Set G.Name
 getConTs t | Just (_, i)  <- G.splitForAllTy_maybe t = getConTs i
 getConTs t | Just (t1,t2) <- G.splitFunTy_maybe t    = getConTs t1 `union` getConTs t2
+getConTs t | Just t1 <- G.splitListTyConApp_maybe t = getConTs t1
 getConTs t | Just (c, ts) <- G.splitTyConApp_maybe t =
   let args = unions $ map getConTs ts
-   in if G.isTupleTyCon c then args else insert (G.getName c) args
+  in if G.isTupleTyCon c then args else insert (G.getName c) args
 getConTs t | Just (t1,t2) <- G.splitAppTy_maybe t    = getConTs t1 `union` getConTs t2
 getConTs t | Just _       <- G.getTyVar_maybe t      = empty
 getConTs _                                           = empty

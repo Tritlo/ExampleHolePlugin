@@ -29,8 +29,8 @@ setDjinnEnv e (HPS _ sols secs)  = HPS e sols secs
 
 initPlugin :: [CommandLineOption] -> TcM (TcRef HolePluginState)
 -- We take more than we need since djinn is prone to duplicate solutions...
-initPlugin [sols] = newTcRef $ HPS [] (Max (read @Int sols * 10)) (1000 :: Int)
-initPlugin _ = newTcRef $ HPS [] (Max 30) (500 :: Int)
+initPlugin [sols] = newTcRef $ HPS [] (Max (read @Int sols * 10)) (5000 :: Int)
+initPlugin _ = newTcRef $ HPS [] (Max 30) (100000 :: Int)
 
 
 -- | Adds the current candidates to scope in djinn.
