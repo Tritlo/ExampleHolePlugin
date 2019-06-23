@@ -3,7 +3,7 @@ ExampleHolePlugin
 
 This repository contains a collection of example hole fit plugins for GHC.
 
-Note! Needs a custom branch of GHC [currently in submission](https://gitlab.haskell.org/ghc/ghc/merge_requests/153).
+Note! Needs a freshly built GHC HEAD.
 
 Checkout the plugins in the directories:
 
