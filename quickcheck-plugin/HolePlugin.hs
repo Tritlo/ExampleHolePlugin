@@ -47,14 +47,8 @@ candP _ hole cands = do
         _ -> return cands
 
 hfName :: HoleFit -> Maybe Name
-hfName hf@(HoleFit {}) = (Just . hfCandName . hfCand) hf
+hfName hf@(HoleFit {}) = (Just . getName . hfCand) hf
 hfName _ = Nothing
-
-hfCandName  :: HoleFitCandidate -> Name
-hfCandName (IdHFCand id) = idName id
-hfCandName (NameHFCand name) = name
-hfCandName (GreHFCand gre) = gre_name gre
-hfCandName (RawHFCand n _ _) = n
 
 
 data PropFilterOut = PFO { hName :: Maybe String,

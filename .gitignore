@@ -3,3 +3,7 @@ dist-newstyle/
 dist/
 **/dist/
 .ghc.environment.*
+
+**/out.fits
+**/head.hackage
+**/FitTest.hs

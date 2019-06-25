@@ -3,11 +3,11 @@
 cp Main.hs MainOrig.hs
 rm -f out.fits
 echo '\n' | ( echo ":load FindFit.hs" \
-            && echo "main" \
+            && echo "Test.FindFit.genFitTestModule" \
             && echo ":load FitTest.hs"\
-            && echo "FitTest.main"\
+            && echo "FitTest.executeFitTest"\
             && echo ":q" \
-            && cat ) | cabal new-repl
+            && cat ) | cabal new-repl --allow-newer
 bat --theme='Monokai Extended Light' Main.hs
 cp MainOrig.hs Main.hs
 

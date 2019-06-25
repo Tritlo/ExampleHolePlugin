@@ -15,15 +15,15 @@ data ProgOut = ProgO { oHoleL :: Maybe String
                      , fits :: [String] } deriving (Show, Read)
                       
 
-main :: IO ()
-main = do pins <- getProgInputs "out.fits"
-          let mods = map modN pins
-          print pins
-          let prel = unlines $ genProgPrelude mods
-          let fr = genFitReps $ map piToChecks pins
-          let prog = prel ++ fr ++ genMain
-          putStrLn $ prog
-          writeFile "FitTest.hs" prog
+genFitTestModule :: IO ()
+genFitTestModule = do pins <- getProgInputs "out.fits"
+                      let mods = map modN pins
+                      print pins
+                      let prel = unlines $ genProgPrelude mods
+                      let fr = genFitReps $ map piToChecks pins
+                      let prog = prel ++ fr ++ genMain
+                      putStrLn $ prog
+                      writeFile "FitTest.hs" prog
 
 addToFile :: ProgOut -> IO ()
 addToFile (ProgO { oHoleL = Just filename
@@ -41,7 +41,7 @@ addToFiles = mapM_ addToFile
 
 
 genMain :: Program
-genMain = unlines $ ["", "main = fitReps >>= addToFiles"]
+genMain = unlines $ ["", "executeFitTest = fitReps >>= addToFiles"]
 
 genFitReps :: [Statement] -> Program
 genFitReps checks = unlines ["fitReps :: IO [ProgOut]"
