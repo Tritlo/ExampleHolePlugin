@@ -6,7 +6,7 @@ This hole plugin shows how `djinn` can be invoked by a hole fit plugin to synthe
 
 `DjinnBridge` is based on the `djinn-ghc` package by Alejandro Serrano but modified to use `TcM` directly.
 
-Note! Needs to a custom branch of GHC [currently in submission](https://gitlab.haskell.org/ghc/ghc/merge_requests/153).
+Note! Needs a freshly built GHC HEAD.
 
 Example Output
 -----------------

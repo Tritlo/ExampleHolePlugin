@@ -1,7 +1,7 @@
 QuickCheck Plugin
 =================
 
-Note! Needs to a custom branch of GHC [currently in submission](https://phabricator.haskell.org/D5373).
+Note! Needs a custom branch of GHC [currently in submission](https://phabricator.haskell.org/D5373).
 
 
 Example Output:

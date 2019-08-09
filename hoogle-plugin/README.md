@@ -1,7 +1,7 @@
 Hoogle Plugin
 =================
 
-Note! Needs to a custom branch of GHC [currently in submission](https://phabricator.haskell.org/D5373).
+Note! Needs a freshly built GHC HEAD
 
 An example of a hole fit plugin for GHC that can filter by module and
 searches the local Hoogle for fits (if hoogle is available, and the

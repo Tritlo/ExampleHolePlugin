@@ -1,33 +1,30 @@
-Djinn Plugin
+The Djinn Hoogle Module Plugin
 =================
 
 
-This hole plugin shows how `djinn` can be invoked by a hole fit plugin to synthesize simple programs.
+This hole plugin shows how `djinn` can be invoked by a hole fit plugin to synthesize simple programs, but
+also shows how to combine different functionality in one plugin using the name of holes.
 
 `DjinnBridge` is based on the `djinn-ghc` package by Alejandro Serrano but modified to use `TcM` directly.
 
-Note! Needs to a custom branch of GHC [currently in submission](https://gitlab.haskell.org/ghc/ghc/merge_requests/153).
+Note! Needs a freshly built GHC.
 
 Example Output
 -----------------
 
-Using this plugin, you can compile the following:
+Using this plugin, you can compile the following (using `cabal new-build test` with a freshly built GHC HEAD):
 
 ```haskell
-{-# OPTIONS -fplugin=DjinnPlugin -funclutter-valid-hole-fits #-}
+{-# OPTIONS -fplugin=DjinnHoogleModPlugin
+            -funclutter-valid-hole-fits #-}
 module Main where
-
-f :: a  -> a
-f = _
-
-g :: a -> b -> b
-g = _
-
-i :: (a,b) -> a
-i = _
-
-j :: a -> a -> a
-j = _
+import Control.Monad
+f :: (a,b) -> a
+f = _invoke_Djinn
+g :: [a] -> [[a]]
+g = _invoke_Hoogle
+h :: [[a]] -> [a]
+h = _module_Control_Monad
 
 
 main :: IO ()
@@ -38,84 +35,68 @@ main = return ()
 And get the following output:
 
 ```
-Main.hs:5:5: error:
-    • Found hole: _ :: a -> a
-      Where: ‘a’ is a rigid type variable bound by
-               the type signature for:
-                 f :: forall a. a -> a
-               at Main.hs:4:1-12
-    • In the expression: _
-      In an equation for ‘f’: f = _
-    • Relevant bindings include f :: a -> a (bound at Main.hs:5:1)
-      Valid hole fits include
-        (\ a -> a)
-        (\ _ -> head (cycle (([]) ++ ([]))))
-        (\ _ -> id (head (cycle (([]) ++ ([])))))
-        f :: a -> a
-        id :: forall a. a -> a
-  |
-5 | f = _
-  |     ^
 
-Main.hs:8:5: error:
-    • Found hole: _ :: a -> b -> b
-      Where: ‘a’, ‘b’ are rigid type variables bound by
-               the type signature for:
-                 g :: forall a b. a -> b -> b
-               at Main.hs:7:1-16
-    • In the expression: _
-      In an equation for ‘g’: g = _
-    • Relevant bindings include g :: a -> b -> b (bound at Main.hs:8:1)
-      Valid hole fits include
-        (\ _ a -> a)
-        (\ _ a -> seq (head (cycle (([]) ++ ([])))) a)
-        (\ _ a -> snd (head (cycle (([]) ++ ([]))), a))
-        g :: a -> b -> b
-        seq :: forall a b. a -> b -> b
-  |
-8 | g = _
-  |     ^
-
-Main.hs:11:5: error:
-    • Found hole: _ :: (a, b) -> a
+Main.hs:6:5: error:
+    • Found hole: _invoke_Djinn :: (a, b) -> a
       Where: ‘b’, ‘a’ are rigid type variables bound by
                the type signature for:
-                 i :: forall a b. (a, b) -> a
-               at Main.hs:10:1-15
-    • In the expression: _
-      In an equation for ‘i’: i = _
-    • Relevant bindings include
-        i :: (a, b) -> a (bound at Main.hs:11:1)
+                 f :: forall a b. (a, b) -> a
+               at Main.hs:5:1-15
+      Or perhaps ‘_invoke_Djinn’ is mis-spelled, or not in scope
+    • In the expression: _invoke_Djinn
+      In an equation for ‘f’: f = _invoke_Djinn
+    • Relevant bindings include f :: (a, b) -> a (bound at Main.hs:6:1)
       Valid hole fits include
         (\ (a, _) -> a)
-        (\ _ -> head (cycle (([]) ++ ([]))))
-        (\ _ -> f (head (cycle (([]) ++ ([])))))
-        i :: (a, b) -> a
+        (\ _ -> head (cycle (h (g ([])) ++ h (g ([])))))
+        f :: (a, b) -> a
         fst :: forall a b. (a, b) -> a
-   |
-11 | i = _
-   |     ^
+  |
+6 | f = _invoke_Djinn
+  |     ^^^^^^^^^^^^^
 
-Main.hs:14:5: error:
-    • Found hole: _ :: a -> a -> a
+Main.hs:8:5: error:
+    • Found hole: _invoke_Hoogle :: [a] -> [[a]]
       Where: ‘a’ is a rigid type variable bound by
                the type signature for:
-                 j :: forall a. a -> a -> a
-               at Main.hs:13:1-16
-    • In the expression: _
-      In an equation for ‘j’: j = _
+                 g :: forall a. [a] -> [[a]]
+               at Main.hs:7:1-17
+      Or perhaps ‘_invoke_Hoogle’ is mis-spelled, or not in scope
+    • In the expression: _invoke_Hoogle
+      In an equation for ‘g’: g = _invoke_Hoogle
     • Relevant bindings include
-        j :: a -> a -> a (bound at Main.hs:14:1)
+        g :: [a] -> [[a]] (bound at Main.hs:8:1)
       Valid hole fits include
-        (\ _ a -> a)
-        (\ a _ -> a)
-        (\ _ _ -> head (cycle (([]) ++ ([]))))
-        j :: a -> a -> a
-        g :: forall a b. a -> b -> b
-        seq :: forall a b. a -> b -> b
+        Hoogle says: Data.List subsequences :: [a] -> [[a]]
+        Hoogle says: Data.List permutations :: [a] -> [[a]]
+        g :: [a] -> [[a]]
+        repeat :: forall a. a -> [a]
+        return :: forall (m :: * -> *) a. Monad m => a -> m a
+        pure :: forall (f :: * -> *) a. Applicative f => a -> f a
         (Some hole fits suppressed; use -fmax-valid-hole-fits=N or -fno-max-valid-hole-fits)
-   |
-14 | j = _
-   |     ^
+  |
+8 | g = _invoke_Hoogle
+  |     ^^^^^^^^^^^^^^
 
+Main.hs:10:5: error:
+    • Found hole: _module_Control_Monad :: [[a]] -> [a]
+      Where: ‘a’ is a rigid type variable bound by
+               the type signature for:
+                 h :: forall a. [[a]] -> [a]
+               at Main.hs:9:1-17
+      Or perhaps ‘_module_Control_Monad’ is mis-spelled, or not in scope
+    • In the expression: _module_Control_Monad
+      In an equation for ‘h’: h = _module_Control_Monad
+    • Relevant bindings include
+        h :: [[a]] -> [a] (bound at Main.hs:10:1)
+      Valid hole fits include
+        h :: [[a]] -> [a]
+        join :: forall (m :: * -> *) a. Monad m => m (m a) -> m a
+        msum :: forall (t :: * -> *) (m :: * -> *) a.
+                (Foldable t, MonadPlus m) =>
+                t (m a) -> m a
+        forever :: forall (f :: * -> *) a b. Applicative f => f a -> f b
+   |
+10 | h = _module_Control_Monad
+   |     ^^^^^^^^^^^^^^^^^^^^^
 ```
