@@ -154,4 +154,4 @@ hoogleFP hole hfs =
        res <- case tyString of
                 Just ty -> liftIO $ searchHoogle ty
                 _ -> return []
-       return $ (take 2 $ map (RawHoleFit . text . ("Hoogle says: " ++)) res) ++ hfs
+       return $ (take 2 $ map (RawHoleFit . text . ("Hoogle: " ++)) res) ++ hfs
