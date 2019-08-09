@@ -1,13 +1,16 @@
 The Djinn Hoogle Module Plugin
 =================
 
+The Djinn Hoogle Module Plugin showcases some basic hole fit plugin functionality,
+including how to combine multiple plugins into one by using the name of holes.
 
-This hole plugin shows how `djinn` can be invoked by a hole fit plugin to synthesize simple programs, but
-also shows how to combine different functionality in one plugin using the name of holes.
+This plugin shows how `djinn` can be invoked by a hole fit plugin to synthesize simple programs, how
+`hoogle` can be invoked by the compiler to search for a fit by the type, and how candidates can be
+filtered by module.
 
 `DjinnBridge` is based on the `djinn-ghc` package by Alejandro Serrano but modified to use `TcM` directly.
 
-Note! Needs a freshly built GHC.
+Note! Needs a freshly built GHC HEAD.
 
 Example Output
 -----------------
