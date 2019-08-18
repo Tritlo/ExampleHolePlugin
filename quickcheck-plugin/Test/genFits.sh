@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 cp Main.hs MainOrig.hs
+touch out.fits
 rm -f out.fits
 echo '\n' | ( echo ":load FindFit.hs" \
             && echo "Test.FindFit.genFitTestModule" \
