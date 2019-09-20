@@ -1,0 +1,6 @@
+Build profile: -w ghc-8.9.0.20190624 -O1
+In order, the following will be built (use -v for more details):
+ - Test-1.0.0 (exe:test) (file Main.hs changed)
+Preprocessing executable 'test' for Test-1.0.0..
+Building executable 'test' for Test-1.0.0..
+[1 of 1] Compiling Main             ( Main.hs, /home/tritlo/Code/new-hole-plugin/djinn-hoogle-mod-plugin/dist-newstyle/build/x86_64-linux/ghc-8.9.0.20190624/Test-1.0.0/x/test/build/test/test-tmp/Main.o )

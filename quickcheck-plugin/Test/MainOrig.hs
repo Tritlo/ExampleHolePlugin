@@ -6,17 +6,17 @@ import Prelude hiding (head, last)
 import Data.List (head, last)
 
 j :: [Int] -> Int
-j = _with_prop_isLength
+j = _with_prop_behavesLikeLength
 
-prop_isLength :: ([Int] -> Int) -> Bool
-prop_isLength f = f [] == 0 && f [5,6] == 2
+prop_behavesLikeLength :: ([Int] -> Int) -> Bool
+prop_behavesLikeLength f = f [] == 0 && f [5,6] == 2
 
 k :: [Int] -> Int
-k = _with_prop_isHead
+k = _with_prop_behavesLikeHead
 
-prop_isHead :: ([Int] -> Int) -> [Int] -> Bool
-prop_isHead f [] = True
-prop_isHead f (x:xs) = (f (x:xs)) == x
+prop_behavesLikeHead :: ([Int] -> Int) -> [Int] -> Bool
+prop_behavesLikeHead f [] = True
+prop_behavesLikeHead f (x:xs) = (f (x:xs)) == x
 
 
 main :: IO ()

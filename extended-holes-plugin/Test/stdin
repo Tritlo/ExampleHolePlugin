@@ -1,0 +1,21 @@
+
+Main.hs:5:5: error:
+    • Found hole: _invoke_Djinn :: [a] -> [[a]]
+      Where: ‘a’ is a rigid type variable bound by
+               the type signature for:
+                 f :: forall a. [a] -> [[a]]
+               at Main.hs:4:1-17
+      Or perhaps ‘_invoke_Djinn’ is mis-spelled, or not in scope
+    • In the expression: _invoke_Djinn
+      In an equation for ‘f’: f = _invoke_Djinn
+    • Relevant bindings include
+        f :: [a] -> [[a]] (bound at Main.hs:5:1)
+      Valid hole fits include
+        f :: [a] -> [[a]]
+        repeat :: forall a. a -> [a]
+        return :: forall (m :: * -> *) a. Monad m => a -> m a
+        pure :: forall (f :: * -> *) a. Applicative f => a -> f a
+        mempty :: forall a. Monoid a => a
+  |
+5 | f = _invoke_Djinn
+  |     ^^^^^^^^^^^^^
