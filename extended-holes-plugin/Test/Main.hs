@@ -1,5 +1,6 @@
 {-# OPTIONS -fplugin=ExtendedHolesPlugin -funclutter-valid-hole-fits #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ExtendedTypedHoles #-}
 module Main where
 import Control.Monad
 import Language.Haskell.TH

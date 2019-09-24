@@ -16,6 +16,7 @@ Using this plugin, you can compile the following (using `cabal new-build test` w
 ```haskell
 {-# OPTIONS -fplugin=ExtendedHolesPlugin -funclutter-valid-hole-fits #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ExtendedTypedHOles #-}
 module Main where
 import Control.Monad
 import Language.Haskell.TH
@@ -31,16 +32,16 @@ main = return ()
 And get the following output:
 
 ```
-Main.hs:9:5: error:
+Main.hs:10:5: error:
     • Found hole: _$(...)0 :: (a, b) -> b
       Where: ‘a’, ‘b’ are rigid type variables bound by
                the type signature for:
                  f :: forall a b. (a, b) -> b
-               at Main.hs:8:1-15
+               at Main.hs:9:1-15
       Or perhaps ‘_$(...)0’ is mis-spelled, or not in scope
     • In the expression: _$(...)0
       In an equation for ‘f’: f = _$(...)0
-    • Relevant bindings include f :: (a, b) -> b (bound at Main.hs:9:1)
+    • Relevant bindings include f :: (a, b) -> b (bound at Main.hs:10:1)
       Valid hole fits include
         (\ (_, a) -> a)
         (\ (_, a) -> seq (head (cycle (([]) ++ ([])))) a)
@@ -48,7 +49,7 @@ Main.hs:9:5: error:
         Hoogle: Data.Tuple fst :: (a, b) -> a
         f :: (a, b) -> b
         snd :: forall a b. (a, b) -> b
-  |
-9 | f = _$(invoke "hoogle" & filterBy "Prelude" & invoke "djinn")0
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+10 | f = _$(invoke "hoogle" & filterBy "Prelude" & invoke "djinn")0
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ```
