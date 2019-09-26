@@ -1,7 +1,7 @@
-{-# LANGUAGE TypeApplications, RecordWildCards #-}
+{-# LANGUAGE TypeApplications, RecordWildCards, DeriveDataTypeable, MagicHash #-}
 module ExtendedHolesPlugin where
 
-import GhcPlugins hiding ((<>))
+import GhcPlugins hiding ((<>), getSrcSpanM)
 
 import TcHoleErrors
 
@@ -32,6 +32,17 @@ import Language.Haskell.TH (Q, Exp)
 import Data.Char (toLower)
 
 import Debug.Trace
+
+import Data.Data
+
+
+
+import HscMain (hscCompileCoreExpr)
+import HsExtension
+import GHCi (wormhole)
+import DsExpr (dsLExpr)
+import DsMonad (initDsTc)
+import GHC.Exts (unsafeCoerce#)
 
 
 invoke :: String -> Q Exp
@@ -112,7 +123,7 @@ dedup = dedup' Set.empty
 data PluginType = Djinn 
                 | Hoogle
                 | Mod String
-                deriving (Eq, Show)
+                deriving (Eq, Show, Data)
 
 toPluginType :: Maybe String -> [PluginType]
 toPluginType (Just holeContent) = map toT spl
@@ -125,8 +136,32 @@ toPluginType (Just holeContent) = map toT spl
 toPluginType _ = []
 
 
+runLHsExpr :: LHsExpr GhcTc -> TcM a
+runLHsExpr expr =
+  do { hsc_env <- getTopEnv
+     ; dflags <- getDynFlags
+     ; expr' <- withPlugins (hsc_dflags hsc_env) spliceRunAction expr
+     ; ds_expr <- initDsTc (dsLExpr expr')
+     ; src_span <- getSrcSpanM
+     ; either_hval <- tryM $ liftIO $
+                         hscCompileCoreExpr hsc_env src_span ds_expr
+     ; case either_hval of
+        Left exn -> error $ showSDocUnsafe $ text "had error!" --ppr exn
+        Right fhv -> do { hv <- liftIO $ wormhole dflags fhv
+                        ; return (unsafeCoerce# hv) } }
+
 djinnHoogleModCP :: TcRef HolePluginState -> CandPlugin
-djinnHoogleModCP ref hole cands =
+djinnHoogleModCP ref hole cands = do
+  let hexpr = getHoleExpr hole
+  error $ showSDocUnsafe $ ppr hexpr
+  case hexpr of
+    Just lexpr -> do res <- runLHsExpr lexpr
+                     case res of
+                        Hoogle -> error "got Hoogle"
+                        _ -> error "agggh"
+    _ -> error "oh no"
+
+
   foldl (>>=) (return cands) $ map action $ toPluginType $ getHoleContent hole
      
      
@@ -151,6 +186,13 @@ holeFitP opts = Just (HoleFitPluginR initP pluginDef stopP)
         pluginDef ref = HoleFitPlugin { candPlugin = djinnHoogleModCP ref
                                       , fitPlugin  = djinnHoogleModFP ref }
 
+data D = A {g :: Integer, t :: String} | B deriving (Show, Data)
+
+getHoleExpr :: TypedHole -> Maybe (LHsExpr GhcTc)
+getHoleExpr hole = 
+    case tyHCt hole of
+        Just (CHoleCan _ (ExtendedExprHole (ExtendedHoleSplice _ lexpr))) -> Just lexpr
+        _ -> Nothing
 
 getHoleContent :: TypedHole -> Maybe String
 getHoleContent hole = 
@@ -159,6 +201,8 @@ getHoleContent hole =
         Just (CHoleCan _ (ExtendedExprHole (ExtendedHoleSplice _ (L _ expr)))) -> 
             case expr of 
                 HsPar _ (L _ (HsLit _ (HsString _ l))) -> Just $ unpackFS l
+                --(HsPar _ (L _ e)) -> error $ show  $ toConstr e
+                (HsPar _ (L _ e)) -> error $ showSDocUnsafe $ ppr e
                 _ -> Nothing
         _ -> Nothing
 

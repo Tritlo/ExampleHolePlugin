@@ -3,10 +3,13 @@
 {-# LANGUAGE ExtendedTypedHoles #-}
 module Main where
 import Control.Monad
-import Language.Haskell.TH
 import ExtendedHolesPlugin
+import Control.Monad
 
-f :: (a,b) -> b
-f = _$(invoke "hoogle" & filterBy "Prelude" & invoke "djinn")0
+import Language.Haskell.TH.Syntax
+
+
+h :: ()
+h = _$(liftData Hoogle)
 
 main = return ()
