@@ -19,23 +19,17 @@ import Data.List (sortOn)
 
 import qualified Data.Set as Set
 
-import Data.List (intersect, stripPrefix)
--- import RdrName (importSpecModule)
+import Data.List (intersect)
 
 import System.Process
 
 import HsExpr
-import HsLit
 
-import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH (Q, Exp)
-import Data.Char (toLower)
-
-import Debug.Trace
 
 import Data.Data
 
-
+import  Data.Char (isSpace)
 
 import HscMain (hscCompileCoreExpr)
 import HsExtension
@@ -44,18 +38,34 @@ import DsExpr (dsLExpr)
 import DsMonad (initDsTc)
 import GHC.Exts (unsafeCoerce#)
 
+import qualified Control.Monad.State.Lazy as St
+import Control.Monad.State.Lazy (State)
 
-invoke :: String -> Q Exp
-invoke str = return $ TH.LitE $ TH.StringL ("invoke " ++ (map toLower str))
-filterBy :: String -> Q Exp
-filterBy str = return $ TH.LitE $ TH.StringL ("module " ++ str)
+import Data.Sequence (Seq)
+import qualified Data.Sequence as Seq
 
-(&) :: Q Exp -> Q Exp -> Q Exp
-(&) e1 e2 = do TH.LitE (TH.StringL str1) <- e1
-               TH.LitE (TH.StringL str2) <- e2
-               return $ TH.LitE  $ TH.StringL  $ str1 ++ "&" ++ str2
-                  
+import Data.Foldable (toList)
 
+
+import Language.Haskell.TH.Syntax (liftData)
+
+
+type Cmd = State (Seq PluginType)
+
+invoke :: PluginType -> Cmd ()
+invoke t = St.modify (flip (Seq.|>) t)
+
+filterBy :: String -> Cmd ()
+filterBy str = St.modify (flip (Seq.|>) (Mod str))
+
+boo :: Bool -> Cmd Bool
+boo = return
+
+pfp :: String -> Cmd ()
+pfp = error
+
+exec :: Cmd a -> Q Exp
+exec cmds = liftData $ toList $ St.execState cmds Seq.empty 
 
 
 data HolePluginState = HPS { djinnEnv :: Environment
@@ -69,8 +79,8 @@ initPlugin :: [CommandLineOption] -> TcM (TcRef HolePluginState)
 -- We take more than we need since djinn is prone to duplicate solutions...
 initPlugin _ = newTcRef $ HPS [] (Max 20) (40000 :: Int)
 
-
-
+trim :: String -> String
+trim = reverse . dropWhile isSpace . reverse .  dropWhile isSpace
 
 
 -- | Adds the current candidates to scope in djinn.
@@ -128,43 +138,41 @@ data PluginType = Djinn
 toPluginType :: Maybe String -> [PluginType]
 toPluginType (Just holeContent) = map toT spl
   where spl = split '&' holeContent
-        toT c = case c of 
+        toT c = case (trim c) of
                 "invoke djinn" -> Djinn
                 "invoke hoogle" -> Hoogle
-                'm':'o':'d':'u':'l':'e':' ':rest -> Mod rest
-                _ -> error holeContent -- None
+                'f':'i':'l':'t':'e':'r':'B':'y':' ':rest -> Mod rest
+                _ -> error $ show $ trim c
 toPluginType _ = []
 
-
+-- This is a very dirty function that takes an expression
+-- and just returns whatever is expected.
 runLHsExpr :: LHsExpr GhcTc -> TcM a
 runLHsExpr expr =
   do { hsc_env <- getTopEnv
      ; dflags <- getDynFlags
-     ; expr' <- withPlugins (hsc_dflags hsc_env) spliceRunAction expr
-     ; ds_expr <- initDsTc (dsLExpr expr')
+     -- De-sugar the expression
+     ; ds_expr <- initDsTc (dsLExpr expr)
      ; src_span <- getSrcSpanM
      ; either_hval <- tryM $ liftIO $
-                         hscCompileCoreExpr hsc_env src_span ds_expr
+        hscCompileCoreExpr hsc_env src_span ds_expr
      ; case either_hval of
-        Left exn -> error $ showSDocUnsafe $ text "had error!" --ppr exn
+        Left exn -> error $ show exn
         Right fhv -> do { hv <- liftIO $ wormhole dflags fhv
+                        -- My lord... is that legal?
+                        -- I will make it legal.
                         ; return (unsafeCoerce# hv) } }
 
+getCommands :: TypedHole -> TcM [PluginType]
+getCommands hole = do case hexpr of
+                       Just lexpr -> runLHsExpr lexpr
+                       _ -> return $ toPluginType $ getHoleContent hole
+ where hexpr = getHoleExpr hole
+
 djinnHoogleModCP :: TcRef HolePluginState -> CandPlugin
-djinnHoogleModCP ref hole cands = do
-  let hexpr = getHoleExpr hole
-  error $ showSDocUnsafe $ ppr hexpr
-  case hexpr of
-    Just lexpr -> do res <- runLHsExpr lexpr
-                     case res of
-                        Hoogle -> error "got Hoogle"
-                        _ -> error "agggh"
-    _ -> error "oh no"
-
-
-  foldl (>>=) (return cands) $ map action $ toPluginType $ getHoleContent hole
-     
-     
+djinnHoogleModCP ref hole candidates = do
+  commands <- getCommands hole
+  foldl (>>=) (return candidates) $ map action commands
   where greNotInOpts opts (GreHFCand gre) = not $ null $ intersect (inScopeVia gre) opts
         greNotInOpts _ _ = True
         inScopeVia = map (moduleNameString . importSpecModule) . gre_imp
@@ -174,7 +182,6 @@ djinnHoogleModCP ref hole cands = do
                             -- Filter by where the elemnet comes from 
                             Mod modName -> return $ filter (greNotInOpts [modName]) cands
                             _ -> return cands
-
 
 plugin :: Plugin
 plugin = defaultPlugin { holeFitPlugin = holeFitP, pluginRecompile = purePlugin}
@@ -186,8 +193,6 @@ holeFitP opts = Just (HoleFitPluginR initP pluginDef stopP)
         pluginDef ref = HoleFitPlugin { candPlugin = djinnHoogleModCP ref
                                       , fitPlugin  = djinnHoogleModFP ref }
 
-data D = A {g :: Integer, t :: String} | B deriving (Show, Data)
-
 getHoleExpr :: TypedHole -> Maybe (LHsExpr GhcTc)
 getHoleExpr hole = 
     case tyHCt hole of
@@ -198,17 +203,12 @@ getHoleContent :: TypedHole -> Maybe String
 getHoleContent hole = 
     case tyHCt hole of
         Just (CHoleCan _ (ExtendedExprHole (ExtendedHole _ (Just (L _ str))))) -> Just $ unpackFS str
-        Just (CHoleCan _ (ExtendedExprHole (ExtendedHoleSplice _ (L _ expr)))) -> 
-            case expr of 
-                HsPar _ (L _ (HsLit _ (HsString _ l))) -> Just $ unpackFS l
-                --(HsPar _ (L _ e)) -> error $ show  $ toConstr e
-                (HsPar _ (L _ e)) -> error $ showSDocUnsafe $ ppr e
-                _ -> Nothing
         _ -> Nothing
 
 djinnHoogleModFP :: TcRef HolePluginState -> FitPlugin
-djinnHoogleModFP ref hole hfs =
-  foldl (>>=) (return hfs) $ map action $ toPluginType $ getHoleContent hole
+djinnHoogleModFP ref hole fits =
+  do commands <- getCommands hole
+     foldl (>>=) (return fits) $ map action commands
   where action ty hfs  = case ty of
                            Djinn -> djinnSynthP ref hole hfs
                            Hoogle -> hoogleFP hole hfs

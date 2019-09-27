@@ -2,14 +2,17 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ExtendedTypedHoles #-}
 module Main where
-import Control.Monad
 import ExtendedHolesPlugin
 import Control.Monad
+import Language.Haskell.TH.Syntax (liftData)
 
-import Language.Haskell.TH.Syntax
+f :: (a,b) -> a
+f = _("invoke hoogle & filterBy Prelude & invoke djinn")
 
-
-h :: ()
-h = _$(liftData Hoogle)
+g :: (a,b) -> b
+g = _$( exec $ do
+        invoke Hoogle
+        filterBy "Control.Monad"
+        invoke Djinn)
 
 main = return ()
