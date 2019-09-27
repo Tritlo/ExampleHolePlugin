@@ -4,7 +4,6 @@
 module Main where
 import ExtendedHolesPlugin
 import Control.Monad
-import Language.Haskell.TH.Syntax (liftData)
 
 f :: (a,b) -> a
 f = _("invoke hoogle & filterBy Prelude & invoke djinn")
