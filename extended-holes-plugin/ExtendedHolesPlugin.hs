@@ -5,6 +5,7 @@ import GhcPlugins hiding ((<>), getSrcSpanM)
 
 import TcHoleErrors
 
+
 import TcRnTypes
 
 import TcRnMonad
@@ -29,14 +30,10 @@ import Language.Haskell.TH (Q, Exp)
 
 import Data.Data
 
-import  Data.Char (isSpace)
+import Data.Char (isSpace)
 
-import HscMain (hscCompileCoreExpr)
-import HsExtension
-import GHCi (wormhole)
-import DsExpr (dsLExpr)
-import DsMonad (initDsTc)
-import GHC.Exts (unsafeCoerce#)
+import HsExtension (GhcTc)
+import Data.Dynamic
 
 import qualified Control.Monad.State.Lazy as St
 import Control.Monad.State.Lazy (State)
@@ -45,6 +42,7 @@ import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 
 import Data.Foldable (toList)
+import TcType (TcType)
 
 
 import Language.Haskell.TH.Syntax (liftData)
@@ -133,7 +131,7 @@ dedup = dedup' Set.empty
 data PluginType = Djinn 
                 | Hoogle
                 | Mod String
-                deriving (Eq, Show, Data)
+                deriving (Eq, Show, Data, Typeable)
 
 toPluginType :: Maybe String -> [PluginType]
 toPluginType (Just holeContent) = map toT spl
@@ -145,28 +143,12 @@ toPluginType (Just holeContent) = map toT spl
                 _ -> error $ show $ trim c
 toPluginType _ = []
 
--- This is a very dirty function that takes an expression
--- and just returns whatever is expected.
-runLHsExpr :: LHsExpr GhcTc -> TcM a
-runLHsExpr expr =
-  do { hsc_env <- getTopEnv
-     ; dflags <- getDynFlags
-     -- De-sugar the expression
-     ; ds_expr <- initDsTc (dsLExpr expr)
-     ; src_span <- getSrcSpanM
-     ; either_hval <- tryM $ liftIO $
-        hscCompileCoreExpr hsc_env src_span ds_expr
-     ; case either_hval of
-        Left exn -> error $ show exn
-        Right fhv -> do { hv <- liftIO $ wormhole dflags fhv
-                        -- My lord... is that legal?
-                        -- I will make it legal.
-                        ; return (unsafeCoerce# hv) } }
-
 getCommands :: TypedHole -> TcM [PluginType]
 getCommands hole = do case hexpr of
-                       Just lexpr -> runLHsExpr lexpr
-                       _ -> return $ toPluginType $ getHoleContent hole
+                       Just (lexpr, _) ->
+                         do d <- runExtHExpr lexpr
+                            return $ fromDyn d (error "Got the wrong value from the hole")
+                       _ -> return []
  where hexpr = getHoleExpr hole
 
 djinnHoogleModCP :: TcRef HolePluginState -> CandPlugin
@@ -193,16 +175,11 @@ holeFitP opts = Just (HoleFitPluginR initP pluginDef stopP)
         pluginDef ref = HoleFitPlugin { candPlugin = djinnHoogleModCP ref
                                       , fitPlugin  = djinnHoogleModFP ref }
 
-getHoleExpr :: TypedHole -> Maybe (LHsExpr GhcTc)
+getHoleExpr :: TypedHole -> Maybe (LHsExpr GhcTc, TcType)
 getHoleExpr hole = 
     case tyHCt hole of
-        Just (CHoleCan _ (ExtendedExprHole (ExtendedHoleSplice _ lexpr))) -> Just lexpr
-        _ -> Nothing
-
-getHoleContent :: TypedHole -> Maybe String
-getHoleContent hole = 
-    case tyHCt hole of
-        Just (CHoleCan _ (ExtendedExprHole (ExtendedHole _ (Just (L _ str))))) -> Just $ unpackFS str
+        Just (CHoleCan _ (ExtendedExprHole (ExtendedHole _ (ExtHRawExpr e)) (Just ty))) -> 
+            Just (e, ty)
         _ -> Nothing
 
 djinnHoogleModFP :: TcRef HolePluginState -> FitPlugin
