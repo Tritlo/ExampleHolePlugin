@@ -26,7 +26,7 @@ import System.Process
 
 import HsExpr
 
-import Language.Haskell.TH (Q, Exp)
+import Language.Haskell.TH hiding (ppr, Type, Name)
 
 import Data.Data
 
@@ -45,7 +45,7 @@ import Data.Foldable (toList)
 import TcType (TcType)
 
 
-import Language.Haskell.TH.Syntax (liftData)
+import Language.Haskell.TH.Syntax (liftData, unsafeTExpCoerce)
 
 
 type Cmd = State (Seq PluginType)
@@ -62,8 +62,11 @@ boo = return
 pfp :: String -> Cmd ()
 pfp = error
 
-exec :: Cmd a -> Q Exp
-exec cmds = liftData $ toList $ St.execState cmds Seq.empty 
+execTyped :: Cmd () -> Q (TExp [PluginType])
+execTyped cmds = unsafeTExpCoerce $ liftData $ toList $ St.execState cmds Seq.empty
+
+exec :: Cmd () -> Q Exp
+exec cmds = unType <$> (execTyped cmds)
 
 
 data HolePluginState = HPS { djinnEnv :: Environment
@@ -146,8 +149,10 @@ toPluginType _ = []
 getCommands :: TypedHole -> TcM [PluginType]
 getCommands hole = do case hexpr of
                        Just (lexpr, _) ->
-                         do d <- runExtHExpr lexpr
-                            return $ fromDyn d (error "Got the wrong value from the hole")
+                         do theDyn <- runExtHExpr lexpr
+                            return $ fromDyn
+                                        theDyn
+                                        (error "Got the wrong value from the hole")
                        _ -> return []
  where hexpr = getHoleExpr hole
 
