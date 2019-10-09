@@ -32,7 +32,7 @@ import Data.Data
 
 import Data.Char (isSpace)
 
-import HsExtension (GhcTc)
+import HsExtension (GhcTc, GhcPs)
 import Data.Dynamic
 
 import qualified Control.Monad.State.Lazy as St
@@ -42,8 +42,6 @@ import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 
 import Data.Foldable (toList)
-import TcType (TcType)
-
 
 import Language.Haskell.TH.Syntax (liftData, unsafeTExpCoerce)
 
@@ -134,6 +132,7 @@ dedup = dedup' Set.empty
 data PluginType = Djinn 
                 | Hoogle
                 | Mod String
+                | Discard
                 deriving (Eq, Show, Data, Typeable)
 
 toPluginType :: Maybe String -> [PluginType]
@@ -146,14 +145,18 @@ toPluginType (Just holeContent) = map toT spl
                 _ -> error $ show $ trim c
 toPluginType _ = []
 
+
+
 getCommands :: TypedHole -> TcM [PluginType]
-getCommands hole = do case hexpr of
-                       Just (lexpr, _) ->
-                         do theDyn <- runExtHExpr lexpr
-                            return $ fromDyn
-                                        theDyn
-                                        (error "Got the wrong value from the hole")
-                       _ -> return []
+getCommands hole = recoverM (return [Discard]) $ do
+                    case hexpr of
+                        Just (Left lexpr) ->
+                          do dv <- runEHRExprDyn lexpr
+                             return $ fromDyn dv (error $ show $ dynTypeRep dv ) -- showSDocUnsafe $ ppr lexpr) 
+                        Just (Right lexpr) ->
+                          do dv <- runEHSplice lexpr
+                             return $ fromDyn dv (error $ showSDocUnsafe $ ppr lexpr) 
+                        _ -> return []
  where hexpr = getHoleExpr hole
 
 djinnHoogleModCP :: TcRef HolePluginState -> CandPlugin
@@ -168,6 +171,7 @@ djinnHoogleModCP ref hole candidates = do
                             Djinn -> djinnAddToScopeP ref hole cands
                             -- Filter by where the elemnet comes from 
                             Mod modName -> return $ filter (greNotInOpts [modName]) cands
+                            Discard -> return []
                             _ -> return cands
 
 plugin :: Plugin
@@ -180,11 +184,11 @@ holeFitP opts = Just (HoleFitPluginR initP pluginDef stopP)
         pluginDef ref = HoleFitPlugin { candPlugin = djinnHoogleModCP ref
                                       , fitPlugin  = djinnHoogleModFP ref }
 
-getHoleExpr :: TypedHole -> Maybe (LHsExpr GhcTc, TcType)
+getHoleExpr :: TypedHole -> Maybe (Either (LHsExpr GhcPs) (LHsExpr GhcTc))
 getHoleExpr hole = 
     case tyHCt hole of
-        Just (CHoleCan _ (ExtendedExprHole (ExtendedHole _ (ExtHRawExpr e)) (Just ty))) -> 
-            Just (e, ty)
+        Just (CHoleCan _ (ExtendedExprHole _ (EHRExpr e))) -> Just $ Left e
+        Just (CHoleCan _ (ExtendedExprHole _ (EHRSplice spl))) -> Just $ Right spl
         _ -> Nothing
 
 djinnHoogleModFP :: TcRef HolePluginState -> FitPlugin
@@ -194,6 +198,7 @@ djinnHoogleModFP ref hole fits =
   where action ty hfs  = case ty of
                            Djinn -> djinnSynthP ref hole hfs
                            Hoogle -> hoogleFP hole hfs
+                           Discard -> return []
                            _ -> return hfs
 
 
