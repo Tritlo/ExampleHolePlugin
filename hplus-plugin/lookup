@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+cd $1
+
+stack exec -- hplus "$2" | grep 'SOLUTION:' | cut -f 1 -d ' ' --complement
