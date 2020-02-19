@@ -5,7 +5,7 @@ import GhcPlugins hiding ((<>))
 
 import TcHoleErrors
 
-import TcRnTypes
+import Constraint
 
 import TcRnMonad
 
@@ -109,7 +109,7 @@ toPluginType _ = None
 djinnHoogleModCP :: TcRef HolePluginState -> CandPlugin
 djinnHoogleModCP ref hole cands =
   do let holeN = case tyHCt hole of
-                Just (CHoleCan _ h) -> Just (occNameString $ holeOcc h)
+                Just (CHoleCan _ h ExprHole) -> Just (occNameString h)
                 _ -> Nothing
      case toPluginType holeN of
         -- Pass to the Djinn plugin
@@ -136,7 +136,7 @@ holeFitP opts = Just (HoleFitPluginR initP pluginDef stopP)
 djinnHoogleModFP :: TcRef HolePluginState -> FitPlugin
 djinnHoogleModFP ref hole hfs =
   do let holeN = case tyHCt hole of
-                Just (CHoleCan _ h) -> Just (occNameString $ holeOcc h)
+                Just (CHoleCan _ h ExprHole) -> Just (occNameString h)
                 _ -> Nothing
      case toPluginType holeN of
         Djinn -> djinnSynthP ref hole hfs

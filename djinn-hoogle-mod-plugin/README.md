@@ -10,7 +10,7 @@ filtered by module.
 
 `DjinnBridge` is based on the `djinn-ghc` package by Alejandro Serrano but modified to use `TcM` directly.
 
-Note! Needs a freshly built GHC HEAD.
+Note! Needs GHC 8.10
 
 Example Output
 -----------------

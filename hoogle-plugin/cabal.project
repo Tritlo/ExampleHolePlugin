@@ -1,3 +1,2 @@
 packages: ./
           ./Test
-with-compiler: /home/tritlo/Code/gitlab-ghc/_build/stage1/bin/ghc

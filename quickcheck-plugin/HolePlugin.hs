@@ -8,7 +8,7 @@ import TcHoleErrors
 import Data.List (intersect, stripPrefix)
 import RdrName (importSpecModule)
 
-import TcRnTypes
+import Constraint
 
 import System.Process
 

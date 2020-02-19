@@ -7,7 +7,7 @@ import TcHoleErrors
 import Data.List (intersect, stripPrefix)
 import RdrName (importSpecModule)
 
-import TcRnTypes
+import Constraint
 
 import System.Process
 
@@ -32,7 +32,7 @@ replace match repl str = replace' [] str
 candP :: [CommandLineOption] -> CandPlugin
 candP _ hole cands =
   do let he = case tyHCt hole of
-                Just (CHoleCan _ h) -> Just (occNameString $ holeOcc h)
+                Just (CHoleCan _ h ExprHole) -> Just (occNameString h)
                 _ -> Nothing
      case toFilter he of
         Just undscModName -> do let replaced = replace '_' '.' undscModName

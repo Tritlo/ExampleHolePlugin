@@ -5,7 +5,7 @@ import GhcPlugins hiding ((<>))
 
 import TcHoleErrors
 
-import TcRnTypes
+import Constraint
 
 import TcRnMonad
 

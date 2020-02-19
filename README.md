@@ -3,7 +3,7 @@ ExampleHolePlugin
 
 This repository contains a collection of example hole fit plugins for GHC.
 
-Note! Needs a freshly built GHC HEAD.
+Note! Needs GHC 8.10 for regular holes, and a custom branch for extended holes.
 
 Checkout the plugins in the directories:
 
