@@ -1,8 +1,8 @@
-{-# OPTIONS -fplugin=ExtendedHolesPlugin -funclutter-valid-hole-fits #-}
+{-# OPTIONS -fplugin=NonEmptyHolesPlugin -funclutter-valid-hole-fits #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ExtendedTypedHoles #-}
+{-# LANGUAGE NonEmptyTypedHoles #-}
 module Main where
-import ExtendedHolesPlugin
+import NonEmptyHolesPlugin
 import Control.Monad
 import Data.Dynamic
 import Data.Typeable

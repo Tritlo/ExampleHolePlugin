@@ -1,7 +1,7 @@
-The Extended Holes Plugin
+The Non-Empty Holes Plugin
 =================
 
-The Extended Holes Plugin showcases how the new extended holes allows you
+The Non-Empty Holes Plugin showcases how the new non-empty holes allows you
 to communicate with plugins.
  
 `DjinnBridge` is based on the `djinn-ghc` package by Alejandro Serrano but modified to use `TcM` directly.
@@ -15,11 +15,11 @@ Using this plugin, you can compile the following (using `cabal new-build test` w
 
 ```haskell
 
-{-# OPTIONS -fplugin=ExtendedHolesPlugin -funclutter-valid-hole-fits #-}
+{-# OPTIONS -fplugin=NonEmptyHolesPlugin -funclutter-valid-hole-fits #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ExtendedTypedHoles #-}
+{-# LANGUAGE NonEmptyTypedHoles #-}
 module Main where
-import ExtendedHolesPlugin
+import NonEmptyHolesPlugin
 import Control.Monad
 import Language.Haskell.TH.Syntax (liftData)
 

@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeApplications, RecordWildCards, DeriveDataTypeable, MagicHash #-}
-module ExtendedHolesPlugin where
+module NonEmptyHolesPlugin where
 
 import GhcPlugins hiding ((<>), getSrcSpanM)
 
@@ -187,8 +187,8 @@ holeFitP opts = Just (HoleFitPluginR initP pluginDef stopP)
 getHoleExpr :: TypedHole -> Maybe (Either (LHsExpr GhcPs) (LHsExpr GhcTc))
 getHoleExpr hole = 
     case tyHCt hole of
-        Just (CHoleCan _ (ExtendedExprHole _ (EHRExpr e))) -> Just $ Left e
-        Just (CHoleCan _ (ExtendedExprHole _ (EHRSplice spl))) -> Just $ Right spl
+        Just (CHoleCan _ (NonEmptyExprHole _ (EHRExpr e))) -> Just $ Left e
+        Just (CHoleCan _ (NonEmptyExprHole _ (EHRSplice spl))) -> Just $ Right spl
         _ -> Nothing
 
 djinnHoogleModFP :: TcRef HolePluginState -> FitPlugin
